@@ -7,6 +7,7 @@ from . import alerts, utils
 import requests
 import os
 import math
+from geetools import batch as gbatch
 
 
 def downloadFile(url, name, ext, path=None):
@@ -47,53 +48,222 @@ def downloadFile(url, name, ext, path=None):
 
 
 def _download(image, region, name, limit=100, total_download=300,
-              extension='json', path=None):
+              extension='JSON', path=None):
+
     vector = utils.make_vector(image, region)
-    iterations = math.ceil(total_download/limit)
 
-    for i in range(iterations):
-        i += 1
-        vlist = vector.toList(limit, limit*i)
-        v = ee.FeatureCollection(vlist)
+    if extension in ['JSON', 'json', 'geojson', 'geoJSON']:
+        gbatch.FeatureCollection.toGeoJSON(vector, name, path)
+    else:
+        print('Format {} not supported'.format(extension))
 
-        name_i = '{}_{}'.format(name, i)
-        url = v.getDownloadURL(**{
-                'filetype': extension,
-                'filename': name_i
-              })
-        downloadFile(url, name_i, extension, path)
+    # iterations = math.ceil(total_download/limit)
+
+    # for i in range(iterations):
+    #     i += 1
+    #     vlist = vector.toList(limit, limit*i)
+    #     v = ee.FeatureCollection(vlist)
+    #
+    #     name_i = '{}_{}'.format(name, i)
+    #     # url = v.getDownloadURL(**{
+    #     #         'filetype': extension,
+    #     #         'filename': name_i
+    #     #       })
+    #     # downloadFile(url, name_i, extension, path)
+    #
+    #     gbatch.FeatureCollection.toGeoJSON(v, name_i, path)
 
 
-def download_probable(site, date, limit=1, smooth='max', property_name=None,
-                      path=None, extension='json', features_per_file=100,
-                      total_features=300):
+def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
+            path=None, extension='JSON', features_per_file=100,
+            total_features=300):
     """ Download probable alert vector. Parameter `site` can be a
     FeatureCollection in which case will be splitted with `property_name`
     parameter
     """
-    if isinstance(site, ee.FeatureCollection):
+    extensions = {
+        'JSON': 'geoJSON',
+        'KML': 'kml',
+        'CSV': 'csv'
+    }
+
+    func = {
+        'probable': alerts.get_probable,
+        'confirmed': alerts.get_confirmed
+    }
+
+    if clas not in ['probable', 'confirmed']:
+        clas = 'confirmed'
+
+    basename = '{}_alert_for'.format(clas)
+
+    if isinstance(site, (ee.FeatureCollection, ee.Feature)):
         geom = site.geometry()
     else:
         geom = site
 
-    alert = alerts.get_probable(geom, date, limit, smooth)
+    if path is None:
+        path = os.path.join(os.getcwd(), 'alerts')
 
-    count = utils.histogram(alert, 'probable', geom)
+    errors = []
 
-    # Make a request to handle empty alerts
-    count_client = count.getInfo()
+    if isinstance(site, ee.FeatureCollection) and property_name:
+        names = utils.get_options(site, property_name)
+        names_cli = names.getInfo()
+        for name in names_cli:
+            region = site.filterMetadata(
+                property_name, 'equals', name).first().geometry()
 
-    if count_client > 0:
-        if isinstance(site, ee.FeatureCollection) and property_name:
-            names = utils.get_options(site, property_name)
-            names_cli = names.getInfo()
-            for name in names_cli:
-                region = site.filterMetadata(
-                    property_name, 'equals', name).first().geometry()
-                filename = 'probable_alert_for_{}_{}'.format(date, name)
+            alert = func[clas](region, date, limit, smooth)
+
+            filename = '{}_{}_{}'.format(basename, date, name)
+            try:
                 _download(alert, region, filename, features_per_file,
-                          total_features, extension, path)
+                                total_features, extension, path)
+            except Exception as e:
+                print('ERROR in {}'.format(filename))
+                print(str(e))
+                errors.append(filename)
+                continue
+
+    else:
+        if isinstance(site, ee.Feature) and property_name:
+            name = ee.String(site.get(property_name)).getInfo()
+            filename = '{}_{}_{}'.format(basename, date, name)
         else:
-            filename = 'probable_alert_for_{}'.format(date)
-            _download(alert, geom, filename, features_per_file,
-                      total_features, extension, path)
+            filename = '{}_{}'.format(basename, date)
+
+        alert = func[clas](geom, date, limit, smooth)
+
+        _download(alert, geom, filename, features_per_file, total_features,
+                  extension, path)
+
+
+def toDrive(site, date, folder, clas, limit=1, smooth='max',
+            extension='GeoJSON', property_name=None,
+            verbose=True):
+    """ Upload probable/confirmed alerts to Google Drive """
+
+    date = ee.Date(date)
+
+    if clas not in ['probable', 'confirmed']:
+        clas = 'confirmed'
+
+    name = '{}_alerts_{}'.format(clas, date.format('yyyyMMdd').getInfo())
+
+    try:
+        geom = site.geometry()
+    except:
+        geom = site
+
+    if isinstance(site, ee.FeatureCollection) and property_name:
+        names = utils.get_options(site, property_name)
+        names_cli = names.getInfo()
+        for n in names_cli:
+
+            # file name
+            filename = '{}_{}'.format(name, n)
+
+            # region
+            region = site.filterMetadata(
+                property_name, 'equals', n).first().geometry()
+
+            # alert
+            if clas == 'probable':
+                alert = alerts.get_probable(region, date, limit, smooth)
+            else:
+                alert = alerts.get_confirmed(region, date, limit, smooth)
+
+            vector = utils.make_vector(alert, region)
+
+            try:
+                task = ee.batch.Export.table.toDrive(vector, n, folder,
+                                                     filename, extension)
+                task.start()
+
+                if verbose:
+                    print('uploading {} to {} in GDrive'.format(filename,
+                                                                folder))
+
+            except Exception as e:
+                if verbose:
+                    print('ERROR in {}'.format(filename))
+                    print(str(e))
+                continue
+
+    else:
+        if clas == 'probable':
+            alert = alerts.get_probable(geom, date, limit, smooth)
+        else:
+            alert = alerts.get_confirmed(geom, date, limit, smooth)
+
+        vector = utils.make_vector(alert, geom)
+        task = ee.batch.Export.table.toDrive(vector, name, folder, name,
+                                             extension)
+        task.start()
+
+
+def toAsset(site, date, folder, clas, limit=1, smooth='max',
+            extension='GeoJSON', property_name=None,
+            verbose=True):
+    """ Upload probable/confirmed alerts to Google Drive """
+
+    user = ee.data.getAssetRoots()[0]['id']
+
+    date = ee.Date(date)
+
+    if clas not in ['probable', 'confirmed']:
+        clas = 'confirmed'
+
+    name = '{}_alerts_{}'.format(clas, date.format('yyyyMMdd').getInfo())
+
+    path = '{}/{}'.format(user, folder)
+
+    try:
+        geom = site.geometry()
+    except:
+        geom = site
+
+    if isinstance(site, ee.FeatureCollection) and property_name:
+        names = utils.get_options(site, property_name)
+        names_cli = names.getInfo()
+        for n in names_cli:
+
+            # file name
+            filename = '{}_{}'.format(name, n)
+
+            # region
+            region = site.filterMetadata(
+                property_name, 'equals', n).first().geometry()
+
+            # alert
+            if clas == 'probable':
+                alert = alerts.get_probable(region, date, limit, smooth)
+            else:
+                alert = alerts.get_confirmed(region, date, limit, smooth)
+
+            vector = utils.make_vector(alert, region)
+
+            assetId = '{}/{}'.format(path, filename)
+
+            try:
+                task = ee.batch.Export.table.toAsset(vector, n, assetId)
+                task.start()
+
+                if verbose:
+                    print('uploading {} to {} in Assets'.format(filename,
+                                                                path))
+
+            except Exception as e:
+                if verbose:
+                    print('ERROR in {} to {} in Assets'.format(filename,
+                                                               path))
+                    print(str(e))
+                continue
+
+    else:
+        alert = alerts.get_probable(geom, date, limit, smooth)
+        vector = utils.make_vector(alert, geom)
+        task = ee.batch.Export.table.toDrive(vector, name, folder, name,
+                                             extension)
+        task.start()
