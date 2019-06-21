@@ -14,3 +14,7 @@
 
 # Unit test / coverage reports
 .cache
+
+/alerts/*
+
+*.ipynb
