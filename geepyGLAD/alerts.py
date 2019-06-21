@@ -11,6 +11,12 @@ ALERTS = utils.cleanup_sa19(ee.ImageCollection('projects/glad/alert/UpdResult'))
 TODAY = datetime.date.today()
 
 
+def proxy(image):
+    """ Make a proxy (empty) image with the same bands as the parsed image """
+    unmasked = image.unmask()
+    return unmasked.where(unmasked.neq(0), 0).selfMask()
+
+
 def get_images(collection, year):
     """ Get last 2 images of the given collection and date band of the last
     image """
@@ -66,8 +72,15 @@ def last_probable_mask(collection, year):
 
 def get_probable(site, date, limit=1, smooth='max'):
     """ Get the 'probable' mask for the given site and date """
+    try:
+        site = site.geometry()
+    except:
+        pass
+
     date = ee.Date(date)
     year = date.get('year')
+    month = date.get('month')
+    day = date.get('day')
 
     # limit from ha to m2
     limit = limit * 10000
@@ -79,8 +92,10 @@ def get_probable(site, date, limit=1, smooth='max'):
     # filter bounds
     col = col.filterBounds(site)
 
-    # get loss
     loss = last_probable_mask(col, year)
+
+    # clip loss
+    loss = loss.clip(site)
 
     # loss mask
     loss_mask = loss.select('probable')
@@ -100,13 +115,22 @@ def get_probable(site, date, limit=1, smooth='max'):
     # add date band
     dateBand =  tools.image.doyToDate(smooth_alertDate).rename('alert_date')
 
-    final = final_mask.addBands([smooth_alertDate, dateBand]).updateMask(final_mask)
-    return final
+    final = final_mask.addBands([smooth_alertDate, dateBand])
+
+    final_masked = final.updateMask(final_mask)
+
+    # get days
+    days = utils.get_days(col, month, year)
+
+    return ee.Image(ee.Algorithms.If(days.contains(day), final_masked,
+                                     proxy(final)))
 
 
 def get_confirmed(site, date, limit=1, smooth='max'):
     date = ee.Date(date)
     year = date.get('year')
+    month = date.get('month')
+    day = date.get('day')
 
     # filter collection up to selected date
     start = ee.Date.fromYMD(year, 1, 1)
@@ -132,4 +156,12 @@ def get_confirmed(site, date, limit=1, smooth='max'):
     # add date band
     dateBand =  tools.image.doyToDate(smooth_alertDate).rename('alert_date')
 
-    return final_mask.addBands([dateBand, smooth_alertDate]).updateMask(final_mask)
+    final = final_mask.addBands([dateBand, smooth_alertDate])
+
+    final_masked = final.updateMask(final_mask)
+
+    # get days
+    days = utils.get_days(col, month, year)
+
+    return ee.Image(ee.Algorithms.If(days.contains(day), final_masked,
+                                     proxy(final)))
