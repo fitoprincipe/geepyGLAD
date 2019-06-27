@@ -53,7 +53,7 @@ def _download(image, region, name, limit=100, total_download=300,
     vector = utils.make_vector(image, region)
 
     if extension in ['JSON', 'json', 'geojson', 'geoJSON']:
-        gbatch.FeatureCollection.toGeoJSON(vector, name, path)
+        gbatch.Download.table.toGeoJSON(vector, name, path)
     else:
         print('Format {} not supported'.format(extension))
 
@@ -190,7 +190,15 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
                     print('ERROR in {}'.format(filename))
                     print(str(e))
                 continue
-
+    elif isinstance(site, ee.Feature) and property_name:
+        alert = alerts.get_probable(geom, date, limit, smooth)
+        vector = utils.make_vector(alert, geom)
+        sitename = ee.String(site.get(property_name)).getInfo()
+        # file name
+        name = '{}_{}'.format(name, sitename)
+        task = ee.batch.Export.table.toDrive(vector, name, folder, name,
+                                             extension)
+        task.start()
     else:
         if clas == 'probable':
             alert = alerts.get_probable(geom, date, limit, smooth)
@@ -261,9 +269,15 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
                     print(str(e))
                 continue
 
+    elif isinstance(site, ee.Feature) and property_name:
+        alert = alerts.get_probable(geom, date, limit, smooth)
+        vector = utils.make_vector(alert, geom)
+        sitename = ee.String(site.get(property_name)).getInfo()
+        # file name
+        filename = '{}_{}'.format(name, sitename)
+        # assetId = '{}/{}'.format(path, filename)
+        gbatch.Export.table.toAsset(vector, path, filename)
     else:
         alert = alerts.get_probable(geom, date, limit, smooth)
         vector = utils.make_vector(alert, geom)
-        task = ee.batch.Export.table.toDrive(vector, name, folder, name,
-                                             extension)
-        task.start()
+        gbatch.Export.table.toAsset(vector, path, name)

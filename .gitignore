@@ -6,6 +6,7 @@
 
 # Environments
 .env
+env
 
 # Distribution / packaging
 /build
@@ -18,3 +19,4 @@
 /alerts/*
 
 *.ipynb
+notebooks/
