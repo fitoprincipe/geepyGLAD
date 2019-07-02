@@ -108,6 +108,12 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
     if path is None:
         path = os.path.join(os.getcwd(), 'alerts')
 
+    # make path if not present
+    if not os.path.isdir(path):
+        if verbose:
+            print('creating {}'.format(path))
+        os.mkdir(path)
+
     errors = []
 
     if isinstance(site, ee.FeatureCollection) and property_name:
@@ -122,6 +128,8 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             if subfolder:
                 subpath = os.path.join(path, name)
                 if not os.path.isdir(subpath):
+                    if verbose:
+                        print('creating {}'.format(subpath))
                     os.mkdir(subpath)
             else:
                 subpath = path
