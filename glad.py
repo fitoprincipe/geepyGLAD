@@ -15,13 +15,18 @@ import json
 @click.option('-d', '--date', default=None)
 @click.option('--site', default=None)
 @click.option('-v', '--verbose', default=True, type=bool)
-def main(destination, verbose, clas, date, site):
+def main(savein, verbose, clas, date, site):
     """ Export GLAD alerts to Google Drive, Earth Engine Asset or Local files.
     Takes configuration parameters from `config.json`.
     """
     # load config file
     with open('config.json', 'r') as conf:
         config = json.load(conf)
+
+    if savein:
+        destination = savein
+    else:
+        destination = config['saveTo']
 
     params = config[destination]
 
