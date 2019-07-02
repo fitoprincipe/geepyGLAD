@@ -46,7 +46,7 @@ def get_days(collection, month, year):
 
 def get_pixel_limit(area, scale):
     """ Return number of pixels in the given area (m2) for the given scale """
-    area = ee.Number(area)
+    area = ee.Number(area).multiply(10000)
     scale = ee.Number(scale)
     return area.divide(scale.multiply(scale)).floor()
 
@@ -82,7 +82,7 @@ def smooth(image, algorithm='max'):
     algs = {
         'max': ee.Image.focal_max,
         'mode': ee.Image.focal_mode,
-        'no smooth': ee.Image,
+        'none': ee.Image,
     }
     result = algs[algorithm](image)
 

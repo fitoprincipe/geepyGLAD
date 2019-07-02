@@ -20,3 +20,5 @@ env
 
 *.ipynb
 notebooks/
+
+**/__pycache__

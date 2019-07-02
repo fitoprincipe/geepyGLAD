@@ -47,13 +47,17 @@ def downloadFile(url, name, ext, path=None):
     return handle
 
 
-def _download(image, region, name, limit=100, total_download=300,
-              extension='JSON', path=None):
+def _download(image, region, name, extension='JSON', path=None, verbose=True):
 
     vector = utils.make_vector(image, region)
 
     if extension in ['JSON', 'json', 'geojson', 'geoJSON']:
-        gbatch.Download.table.toGeoJSON(vector, name, path)
+        try:
+            gbatch.Download.table.toGeoJSON(vector, name, path)
+        except:
+            if verbose:
+                print('Download method failed, trying another method...')
+            gbatch.Download.table.toLocal(vector, name, 'JSON')
     else:
         print('Format {} not supported'.format(extension))
 
@@ -75,8 +79,7 @@ def _download(image, region, name, limit=100, total_download=300,
 
 
 def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
-            path=None, extension='JSON', features_per_file=100,
-            total_features=300):
+            path=None, extension='JSON', subfolder=True, verbose=True):
     """ Download probable alert vector. Parameter `site` can be a
     FeatureCollection in which case will be splitted with `property_name`
     parameter
@@ -116,10 +119,20 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
 
             alert = func[clas](region, date, limit, smooth)
 
+            if subfolder:
+                subpath = os.path.join(path, name)
+                if not os.path.isdir(subpath):
+                    os.mkdir(subpath)
+            else:
+                subpath = path
+
             filename = '{}_{}_{}'.format(basename, date, name)
+
+            if verbose:
+                print('Downloading {} to {}'.format(filename, subpath))
+
             try:
-                _download(alert, region, filename, features_per_file,
-                                total_features, extension, path)
+                _download(alert, region, filename, extension, subpath)
             except Exception as e:
                 print('ERROR in {}'.format(filename))
                 print(str(e))
@@ -176,9 +189,12 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
 
             vector = utils.make_vector(alert, region)
 
+            filename = filename.encode().decode('ascii', errors='ignore')
+
             try:
-                task = ee.batch.Export.table.toDrive(vector, n, folder,
-                                                     filename, extension)
+                task = ee.batch.Export.table.toDrive(vector, filename,
+                                                     folder, filename,
+                                                     extension)
                 task.start()
 
                 if verbose:
@@ -212,8 +228,7 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
 
 
 def toAsset(site, date, folder, clas, limit=1, smooth='max',
-            extension='GeoJSON', property_name=None,
-            verbose=True):
+            property_name=None, verbose=True):
     """ Upload probable/confirmed alerts to Google Drive """
 
     user = ee.data.getAssetRoots()[0]['id']
