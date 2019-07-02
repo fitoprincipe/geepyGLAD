@@ -54,9 +54,10 @@ def _download(image, region, name, extension='JSON', path=None, verbose=True):
     if extension in ['JSON', 'json', 'geojson', 'geoJSON']:
         try:
             gbatch.Download.table.toGeoJSON(vector, name, path)
-        except:
+        except Exception as e:
             if verbose:
-                print('Download method failed, trying another method...')
+                msg = 'Download method failed: \n {} \n, trying another method...'
+                print(msg.format(e))
             gbatch.Download.table.toLocal(vector, name, 'JSON')
     else:
         print('Format {} not supported'.format(extension))
