@@ -22,3 +22,6 @@ env
 notebooks/
 
 **/__pycache__
+
+# CONFIG
+config.json

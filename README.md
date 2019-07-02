@@ -8,7 +8,7 @@
 3. Install:
 
 ```bash
-$ virtualenv venv
+$ virtualenv venv --python=python3
 $ . venv/bin/activate
 $ pip install --editable .
 ```
@@ -73,7 +73,7 @@ also be modified when running the script using parameter `-d` or  `--date`.
 - **saveTo**: location to save the results. Can be one of `drive`, `asset` or
 `local`
 
-### Run
+### Run (help)
 ```bash
-$ glad
+$ glad --help
 ```
