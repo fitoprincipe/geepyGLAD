@@ -157,8 +157,7 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
 
         alert = func[clas](geom, date, limit, smooth)
 
-        _download(alert, geom, filename, features_per_file, total_features,
-                  extension, path)
+        _download(alert, geom, filename, extension, path)
 
 
 def toDrive(site, date, folder, clas, limit=1, smooth='max',

@@ -82,9 +82,6 @@ def get_probable(site, date, limit=1, smooth='max'):
     month = date.get('month')
     day = date.get('day')
 
-    # limit from ha to m2
-    limit = limit * 10000
-
     # filter collection up to selected date
     start = ee.Date.fromYMD(year, 1, 1)
     col = ALERTS.filterDate(ee.Date(start), date.advance(1, 'day'))
