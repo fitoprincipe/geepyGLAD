@@ -121,10 +121,19 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
         names = utils.get_options(site, property_name)
         names_cli = names.getInfo()
         for name in names_cli:
+            filename = '{}_{}_{}'.format(basename, date, name)
+
             region = site.filterMetadata(
                 property_name, 'equals', name).first().geometry()
 
             alert = func[clas](region, date, limit, smooth)
+
+            # SKIP IF EMPTY ALERT
+            count = utils.histogram(alert, clas, region).getInfo()
+            if count == 0:
+                if verbose:
+                    print('{} has no alerts, skipping..'.format(filename))
+                continue
 
             if subfolder:
                 subpath = os.path.join(path, name)
@@ -134,8 +143,6 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
                     os.mkdir(subpath)
             else:
                 subpath = path
-
-            filename = '{}_{}_{}'.format(basename, date, name)
 
             if verbose:
                 print('Downloading {} to {}'.format(filename, subpath))
@@ -156,6 +163,13 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             filename = '{}_{}'.format(basename, date)
 
         alert = func[clas](geom, date, limit, smooth)
+
+        # SKIP IF EMPTY ALERT
+        count = utils.histogram(alert, clas, geom).getInfo()
+        if count == 0:
+            if verbose:
+                print('{} has no alerts, skipping..'.format(filename))
+            return None
 
         _download(alert, geom, filename, extension, path)
 
@@ -195,6 +209,13 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
             else:
                 alert = alerts.get_confirmed(region, date, limit, smooth)
 
+            # SKIP IF EMPTY ALERT
+            count = utils.histogram(alert, clas, region).getInfo()
+            if count == 0:
+                if verbose:
+                    print('{} has no alerts, skipping..'.format(filename))
+                continue
+
             vector = utils.make_vector(alert, region)
 
             filename = filename.encode().decode('ascii', errors='ignore')
@@ -215,11 +236,21 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
                     print(str(e))
                 continue
     elif isinstance(site, ee.Feature) and property_name:
-        alert = alerts.get_probable(geom, date, limit, smooth)
-        vector = utils.make_vector(alert, geom)
         sitename = ee.String(site.get(property_name)).getInfo()
         # file name
         name = '{}_{}'.format(name, sitename)
+
+        alert = alerts.get_probable(geom, date, limit, smooth)
+
+        # SKIP IF EMPTY ALERT
+        count = utils.histogram(alert, clas, geom).getInfo()
+        if count == 0:
+            if verbose:
+                print('{} has no alerts, skipping..'.format(name))
+            return None
+
+        vector = utils.make_vector(alert, geom)
+
         task = ee.batch.Export.table.toDrive(vector, name, folder, name,
                                              extension)
         task.start()
@@ -228,6 +259,13 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
             alert = alerts.get_probable(geom, date, limit, smooth)
         else:
             alert = alerts.get_confirmed(geom, date, limit, smooth)
+
+        # SKIP IF EMPTY ALERT
+        count = utils.histogram(alert, clas, geom).getInfo()
+        if count == 0:
+            if verbose:
+                print('{} has no alerts, skipping..'.format(name))
+            return None
 
         vector = utils.make_vector(alert, geom)
         task = ee.batch.Export.table.toDrive(vector, name, folder, name,
@@ -273,6 +311,13 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
             else:
                 alert = alerts.get_confirmed(region, date, limit, smooth)
 
+            # SKIP IF EMPTY ALERT
+            count = utils.histogram(alert, clas, region).getInfo()
+            if count == 0:
+                if verbose:
+                    print('{} has no alerts, skipping..'.format(filename))
+                continue
+
             vector = utils.make_vector(alert, region)
 
             assetId = '{}/{}'.format(path, filename)
@@ -299,8 +344,24 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
         # file name
         filename = '{}_{}'.format(name, sitename)
         # assetId = '{}/{}'.format(path, filename)
+
+        # SKIP IF EMPTY ALERT
+        count = utils.histogram(alert, clas, geom).getInfo()
+        if count == 0:
+            if verbose:
+                print('{} has no alerts, skipping..'.format(filename))
+            return None
+
         gbatch.Export.table.toAsset(vector, path, filename)
     else:
         alert = alerts.get_probable(geom, date, limit, smooth)
         vector = utils.make_vector(alert, geom)
+
+        # SKIP IF EMPTY ALERT
+        count = utils.histogram(alert, clas, geom).getInfo()
+        if count == 0:
+            if verbose:
+                print('{} has no alerts, skipping..'.format(name))
+            return None
+
         gbatch.Export.table.toAsset(vector, path, name)
