@@ -170,7 +170,7 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
     if clas not in ['probable', 'confirmed']:
         clas = 'confirmed'
 
-    name = '{}_alerts_{}'.format(clas, date.format('yyyyMMdd').getInfo())
+    name = '{}_alert_{}'.format(clas, date.format('yyyyMMdd').getInfo())
 
     try:
         geom = site.geometry()
@@ -246,7 +246,7 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
     if clas not in ['probable', 'confirmed']:
         clas = 'confirmed'
 
-    name = '{}_alerts_{}'.format(clas, date.format('yyyyMMdd').getInfo())
+    name = '{}_alert_{}'.format(clas, date.format('yyyyMMdd').getInfo())
 
     path = '{}/{}'.format(user, folder)
 
