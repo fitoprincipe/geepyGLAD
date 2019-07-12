@@ -19,8 +19,11 @@ def cleanup_sa19(collection):
     return alerts
 
 
-def get_days(collection, month, year):
+def get_days(month, year, collection=None):
     """ Get days available for the given month and year """
+    if collection is None:
+        collection = cleanup_sa19(ee.ImageCollection('projects/glad/alert/UpdResult'))
+
     def wrap(img):
         d = img.date()
         m = d.get('month')
@@ -42,6 +45,20 @@ def get_days(collection, month, year):
     days_str = days.map(lambda d: ee.Number(d))
 
     return days_str.distinct()
+
+
+def has_image(date, collection):
+    """ Returns True if there is at least one image for the parsed date in the
+    parsed collection
+
+    Is a server side code, so it returns a server side `True`
+    (use `getInfo` to retrieve it)
+    """
+    d = ee.Date(date)
+    dates = collection.toList(collection.size()).map(
+        lambda img: ee.Image(img).date())
+
+    return ee.List(dates).contains(d)
 
 
 def get_pixel_limit(area, scale):
