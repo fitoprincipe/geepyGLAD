@@ -56,6 +56,10 @@ def main(savein, verbose, clas, date, site):
     else:
         clas = [clas]
 
+    if not glad.utils.has_image(date, glad.alerts.ALERTS).getInfo():
+        print('GLAD alerts not available for date {}'.format(date))
+        return None
+
     for c in clas:
         if destination == 'drive':
             glad.batch.toDrive(site, alert_date, params['folder'], c, limit,
