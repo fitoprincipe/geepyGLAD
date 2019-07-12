@@ -117,7 +117,7 @@ def get_probable(site, date, limit=1, smooth='max'):
     final_masked = final.updateMask(final_mask)
 
     # get days
-    days = utils.get_days(col, month, year)
+    days = utils.get_days(month, year, col)
 
     return ee.Image(ee.Algorithms.If(days.contains(day), final_masked,
                                      proxy(final)))
@@ -158,7 +158,7 @@ def get_confirmed(site, date, limit=1, smooth='max'):
     final_masked = final.updateMask(final_mask)
 
     # get days
-    days = utils.get_days(col, month, year)
+    days = utils.get_days(month, year, col)
 
     return ee.Image(ee.Algorithms.If(days.contains(day), final_masked,
                                      proxy(final)))
