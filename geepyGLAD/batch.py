@@ -85,6 +85,10 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
     FeatureCollection in which case will be splitted with `property_name`
     parameter
     """
+    if not utils.has_image(date, alerts.ALERTS).getInfo():
+        print('GLAD alerts not available for date {}'.format(date))
+        return None
+
     extensions = {
         'JSON': 'geoJSON',
         'KML': 'kml',
@@ -168,8 +172,11 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
             if verbose:
-                print('{} has no alerts, skipping..'.format(filename))
+                print('{} has no alerts'.format(filename))
             return None
+
+        if verbose:
+            print('Downloading {} to {}'.format(filename, path))
 
         _download(alert, geom, filename, extension, path)
 
@@ -178,6 +185,9 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
             extension='GeoJSON', property_name=None,
             verbose=True):
     """ Upload probable/confirmed alerts to Google Drive """
+    if not utils.has_image(date, alerts.ALERTS).getInfo():
+        print('GLAD alerts not available for date {}'.format(date))
+        return None
 
     date = ee.Date(date)
 
@@ -246,7 +256,7 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
             if verbose:
-                print('{} has no alerts, skipping..'.format(name))
+                print('{} has no alerts'.format(name))
             return None
 
         vector = utils.make_vector(alert, geom)
@@ -254,6 +264,8 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
         task = ee.batch.Export.table.toDrive(vector, name, folder, name,
                                              extension)
         task.start()
+        if verbose:
+            print('uploading {} to {} in GDrive'.format(name, folder))
     else:
         if clas == 'probable':
             alert = alerts.get_probable(geom, date, limit, smooth)
@@ -264,18 +276,23 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
             if verbose:
-                print('{} has no alerts, skipping..'.format(name))
+                print('{} has no alerts'.format(name))
             return None
 
         vector = utils.make_vector(alert, geom)
         task = ee.batch.Export.table.toDrive(vector, name, folder, name,
                                              extension)
         task.start()
+        if verbose:
+            print('uploading {} to {} in GDrive'.format(name, folder))
 
 
 def toAsset(site, date, folder, clas, limit=1, smooth='max',
             property_name=None, verbose=True):
     """ Upload probable/confirmed alerts to Google Drive """
+    if not utils.has_image(date, alerts.ALERTS).getInfo():
+        print('GLAD alerts not available for date {}'.format(date))
+        return None
 
     user = ee.data.getAssetRoots()[0]['id']
 
@@ -349,10 +366,12 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
             if verbose:
-                print('{} has no alerts, skipping..'.format(filename))
+                print('{} has no alerts'.format(filename))
             return None
 
         gbatch.Export.table.toAsset(vector, path, filename)
+        if verbose:
+            print('uploading {} to {} in Assets'.format(filename, path))
     else:
         alert = alerts.get_probable(geom, date, limit, smooth)
         vector = utils.make_vector(alert, geom)
@@ -361,7 +380,9 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
             if verbose:
-                print('{} has no alerts, skipping..'.format(name))
+                print('{} has no alerts'.format(name))
             return None
 
         gbatch.Export.table.toAsset(vector, path, name)
+        if verbose:
+            print('uploading {} to {} in Assets'.format(name, path))
