@@ -1,21 +1,36 @@
 # coding=utf-8
-
 import ee
-ee.Initialize()
+try:
+    ee.Initialize()
+except:
+    print("Couldn't connect to Earth Engine. Check your internet connection")
 
 import click
 import geepyGLAD as glad
 from datetime import date as dt
 import json
 
+@click.group()
+def main():
+    pass
 
-@click.command()
+@main.command()
+def user():
+    """ Show Earth Engine user and email """
+    uid = ee.data.getAssetRoots()[0]['id']
+    email = ee.data.getAssetAcl(uid)['owners'][0]
+    us = uid.split('/')[1]
+    print('User: {}\nEmail: {}'.format(us, email))
+    return None
+
+@main.command()
 @click.option('-s', '--savein', default=None, help='where to save the files. Takes default from config.json')
-@click.option('-c', '--clas', default='both', help='The class to export. Can be "probable", "confirmed" or "both"')
-@click.option('-d', '--date', default=None)
-@click.option('--site', default=None)
+@click.option('-c', '--clas', default=None, help='The class to export. Can be "probable", "confirmed" or "both"')
+@click.option('-d', '--date', default=None, help='If this param is not set, it will use the date for today')
+@click.option('--site', default=None, help='The name of the site to process, must be present in the parsed property')
+@click.option('-m', '--mask', default=None, help='The mask to apply to the final result. Can be None, "raster" or "vector"')
 @click.option('-v', '--verbose', default=True, type=bool)
-def main(savein, verbose, clas, date, site):
+def alert(savein, verbose, clas, date, site, mask):
     """ Export GLAD alerts to Google Drive, Earth Engine Asset or Local files.
     Takes configuration parameters from `config.json`.
     """
@@ -51,27 +66,52 @@ def main(savein, verbose, clas, date, site):
     limit = config['minArea']
     smooth = config['smooth']
 
+    # Mask
+    vector_mask_id = config['vectorMask']
+    if vector_mask_id:
+        vector_mask = ee.FeatureCollection(vector_mask_id)
+    raster_mask_id = config['rasterMask']
+    if raster_mask_id:
+        raster_mask = ee.Image(raster_mask_id)
+
+    if not clas:
+        clas = config['class']
+
     if clas == 'both':
         clas = ['probable', 'confirmed']
     else:
         clas = [clas]
 
-    if not glad.utils.has_image(date, glad.alerts.ALERTS).getInfo():
+    has_images = glad.utils.has_image(alert_date, glad.alerts.ALERTS).getInfo()
+
+    if not has_images:
         print('GLAD alerts not available for date {}'.format(date))
         return None
 
     for c in clas:
-        if destination == 'drive':
-            glad.batch.toDrive(site, alert_date, params['folder'], c, limit,
-                               smooth, params['format'], propertyName, verbose)
-        if destination == 'asset':
-            glad.batch.toAsset(site, alert_date, params['folder'], c, limit,
-                               smooth, propertyName, verbose)
+        args = dict(
+            site=site,
+            date=alert_date,
+            clas=c,
+            limit=limit,
+            smooth=smooth,
+            property_name=propertyName,
+            verbose=verbose,
+            folder=params['folder'],
+        )
 
+        if mask == 'raster':
+            args['raster_mask'] = raster_mask
+        elif mask == 'vector':
+            args['vector_mask'] = vector_mask
+
+        if destination == 'drive':
+            glad.batch.toDrive(**args)
+        if destination == 'asset':
+            glad.batch.toAsset(**args)
         if destination == 'local':
-            glad.batch.toLocal(site, alert_date, c, limit, smooth,
-                               propertyName, params['folder'], params['format'],
-                               params['subfolders'], verbose)
+            args['subfolders'] = params['subfolders']
+            glad.batch.toLocal(**args)
 
 
 if __name__ == '__main__':

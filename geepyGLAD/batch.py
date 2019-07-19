@@ -6,8 +6,24 @@ import ee
 from . import alerts, utils
 import requests
 import os
-import math
 from geetools import batch as gbatch
+
+
+FUNCTIONS = {
+    'probable': alerts.get_probable,
+    'confirmed': alerts.get_confirmed
+}
+
+
+def mask(image, vector, raster):
+    """ Mask out a vector mask or a raster mask """
+    if vector:
+        return image.clip(vector)
+    elif raster:
+        return image.updateMask(raster)
+    else:
+        return image
+
 
 
 def downloadFile(url, name, ext, path=None):
@@ -62,25 +78,10 @@ def _download(image, region, name, extension='JSON', path=None, verbose=True):
     else:
         print('Format {} not supported'.format(extension))
 
-    # iterations = math.ceil(total_download/limit)
-
-    # for i in range(iterations):
-    #     i += 1
-    #     vlist = vector.toList(limit, limit*i)
-    #     v = ee.FeatureCollection(vlist)
-    #
-    #     name_i = '{}_{}'.format(name, i)
-    #     # url = v.getDownloadURL(**{
-    #     #         'filetype': extension,
-    #     #         'filename': name_i
-    #     #       })
-    #     # downloadFile(url, name_i, extension, path)
-    #
-    #     gbatch.FeatureCollection.toGeoJSON(v, name_i, path)
-
 
 def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
-            path=None, extension='JSON', subfolder=True, verbose=True):
+            folder=None, extension='JSON', subfolders=True, verbose=True,
+            vector_mask=None, raster_mask=None):
     """ Download probable alert vector. Parameter `site` can be a
     FeatureCollection in which case will be splitted with `property_name`
     parameter
@@ -95,11 +96,6 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
         'CSV': 'csv'
     }
 
-    func = {
-        'probable': alerts.get_probable,
-        'confirmed': alerts.get_confirmed
-    }
-
     if clas not in ['probable', 'confirmed']:
         clas = 'confirmed'
 
@@ -110,14 +106,14 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
     else:
         geom = site
 
-    if path is None:
-        path = os.path.join(os.getcwd(), 'alerts')
+    if folder is None:
+        folder = os.path.join(os.getcwd(), 'alerts')
 
     # make path if not present
-    if not os.path.isdir(path):
+    if not os.path.isdir(folder):
         if verbose:
-            print('creating {}'.format(path))
-        os.mkdir(path)
+            print('creating {}'.format(folder))
+        os.mkdir(folder)
 
     errors = []
 
@@ -130,7 +126,8 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             region = site.filterMetadata(
                 property_name, 'equals', name).first().geometry()
 
-            alert = func[clas](region, date, limit, smooth)
+            alert = FUNCTIONS[clas](region, date, limit, smooth)
+            alert = mask(alert, vector_mask, raster_mask)
 
             # SKIP IF EMPTY ALERT
             count = utils.histogram(alert, clas, region).getInfo()
@@ -139,14 +136,14 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
                     print('{} has no alerts, skipping..'.format(filename))
                 continue
 
-            if subfolder:
-                subpath = os.path.join(path, name)
+            if subfolders:
+                subpath = os.path.join(folder, name)
                 if not os.path.isdir(subpath):
                     if verbose:
                         print('creating {}'.format(subpath))
                     os.mkdir(subpath)
             else:
-                subpath = path
+                subpath = folder
 
             if verbose:
                 print('Downloading {} to {}'.format(filename, subpath))
@@ -166,7 +163,8 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
         else:
             filename = '{}_{}'.format(basename, date)
 
-        alert = func[clas](geom, date, limit, smooth)
+        alert = FUNCTIONS[clas](geom, date, limit, smooth)
+        alert = mask(alert, vector_mask, raster_mask)
 
         # SKIP IF EMPTY ALERT
         count = utils.histogram(alert, clas, geom).getInfo()
@@ -176,14 +174,14 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             return None
 
         if verbose:
-            print('Downloading {} to {}'.format(filename, path))
+            print('Downloading {} to {}'.format(filename, folder))
 
-        _download(alert, geom, filename, extension, path)
+        _download(alert, geom, filename, extension, folder)
 
 
 def toDrive(site, date, folder, clas, limit=1, smooth='max',
             extension='GeoJSON', property_name=None,
-            verbose=True):
+            verbose=True, vector_mask=None, raster_mask=None):
     """ Upload probable/confirmed alerts to Google Drive """
     if not utils.has_image(date, alerts.ALERTS).getInfo():
         print('GLAD alerts not available for date {}'.format(date))
@@ -214,10 +212,8 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
                 property_name, 'equals', n).first().geometry()
 
             # alert
-            if clas == 'probable':
-                alert = alerts.get_probable(region, date, limit, smooth)
-            else:
-                alert = alerts.get_confirmed(region, date, limit, smooth)
+            alert = FUNCTIONS[clas](region, date, limit, smooth)
+            alert = mask(alert, vector_mask, raster_mask)
 
             # SKIP IF EMPTY ALERT
             count = utils.histogram(alert, clas, region).getInfo()
@@ -250,7 +246,9 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
         # file name
         name = '{}_{}'.format(name, sitename)
 
-        alert = alerts.get_probable(geom, date, limit, smooth)
+        # alert
+        alert = FUNCTIONS[clas](geom, date, limit, smooth)
+        alert = mask(alert, vector_mask, raster_mask)
 
         # SKIP IF EMPTY ALERT
         count = utils.histogram(alert, clas, geom).getInfo()
@@ -267,10 +265,9 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
         if verbose:
             print('uploading {} to {} in GDrive'.format(name, folder))
     else:
-        if clas == 'probable':
-            alert = alerts.get_probable(geom, date, limit, smooth)
-        else:
-            alert = alerts.get_confirmed(geom, date, limit, smooth)
+        # alert
+        alert = FUNCTIONS[clas](geom, date, limit, smooth)
+        alert = mask(alert, vector_mask, raster_mask)
 
         # SKIP IF EMPTY ALERT
         count = utils.histogram(alert, clas, geom).getInfo()
@@ -288,7 +285,8 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
 
 
 def toAsset(site, date, folder, clas, limit=1, smooth='max',
-            property_name=None, verbose=True):
+            property_name=None, verbose=True, vector_mask=None,
+            raster_mask=None):
     """ Upload probable/confirmed alerts to Google Drive """
     if not utils.has_image(date, alerts.ALERTS).getInfo():
         print('GLAD alerts not available for date {}'.format(date))
@@ -323,10 +321,8 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
                 property_name, 'equals', n).first().geometry()
 
             # alert
-            if clas == 'probable':
-                alert = alerts.get_probable(region, date, limit, smooth)
-            else:
-                alert = alerts.get_confirmed(region, date, limit, smooth)
+            alert = FUNCTIONS[clas](region, date, limit, smooth)
+            alert = mask(alert, vector_mask, raster_mask)
 
             # SKIP IF EMPTY ALERT
             count = utils.histogram(alert, clas, region).getInfo()
@@ -355,7 +351,9 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
                 continue
 
     elif isinstance(site, ee.Feature) and property_name:
-        alert = alerts.get_probable(geom, date, limit, smooth)
+        # alert
+        alert = FUNCTIONS[clas](geom, date, limit, smooth)
+        alert = mask(alert, vector_mask, raster_mask)
         vector = utils.make_vector(alert, geom)
         sitename = ee.String(site.get(property_name)).getInfo()
         # file name
@@ -373,7 +371,9 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
         if verbose:
             print('uploading {} to {} in Assets'.format(filename, path))
     else:
-        alert = alerts.get_probable(geom, date, limit, smooth)
+        # alert
+        alert = FUNCTIONS[clas](geom, date, limit, smooth)
+        alert = mask(alert, vector_mask, raster_mask)
         vector = utils.make_vector(alert, geom)
 
         # SKIP IF EMPTY ALERT
