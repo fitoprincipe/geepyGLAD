@@ -29,6 +29,8 @@ To configure this application modifying `config.json` the following way:
   "minArea": 1,
 
   "smooth": "max",
+  
+  "class": "both",
 
   "drive": {
     "folder": "GLAD_ALERTS",
@@ -45,7 +47,11 @@ To configure this application modifying `config.json` the following way:
     "format": "JSON"
   },
      
-  "saveTo": "drive"  
+  "saveTo": "drive",
+  
+  "rasterMask": null,
+
+  "vectorMask": null
 }
 ```
 - **assetPath**: the path of the asset that holds the boundaries to clip the 
@@ -58,6 +64,7 @@ parsed, it'll compute the alerts for the date when the script is run. This can
 also be modified when running the script using parameter `-d` or  `--date`.
 - **minArea**: the minimum area to include in results. The units are hectares.
 - **smooth**: the smoothing method. Can be one of: `max`, `mode` or `none`.
+- **class**: the class to compute. Can be one of `probable`, `confirmed` or `both`
 - **drive**:
   - **folder**: Google Drive folder to save results. It cannot be a subfolder.
   It can only be a folder in root. If not present, it will be created.
@@ -72,6 +79,8 @@ also be modified when running the script using parameter `-d` or  `--date`.
   - **format**: it can only be `JSON`
 - **saveTo**: location to save the results. Can be one of `drive`, `asset` or
 `local`
+- **rasterMask**: the assetId for a raster mask
+- **vectorMask**: the assetId for a vector mask (FeatureCollection)
 
 ### Run (help)
 ```bash

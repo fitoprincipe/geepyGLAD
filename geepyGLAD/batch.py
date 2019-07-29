@@ -86,9 +86,11 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
     FeatureCollection in which case will be splitted with `property_name`
     parameter
     """
+    msgs = []
+
     if not utils.has_image(date, alerts.ALERTS).getInfo():
-        print('GLAD alerts not available for date {}'.format(date))
-        return None
+        msgs.append('GLAD alerts not available for date {}'.format(date))
+        return msgs
 
     extensions = {
         'JSON': 'geoJSON',
@@ -130,10 +132,17 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             alert = mask(alert, vector_mask, raster_mask)
 
             # SKIP IF EMPTY ALERT
-            count = utils.histogram(alert, clas, region).getInfo()
+            try:
+                count = utils.histogram(alert, clas, region).getInfo()
+            except Exception as e:
+                msgs.append(str(e))
+                count = 0
+                continue
+
             if count == 0:
                 if verbose:
                     print('{} has no alerts, skipping..'.format(filename))
+                msgs.append('{} has no alerts'.format(filename))
                 continue
 
             if subfolders:
@@ -153,8 +162,11 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             except Exception as e:
                 print('ERROR in {}'.format(filename))
                 print(str(e))
+                msgs.append(str(e))
                 errors.append(filename)
                 continue
+            else:
+                msgs.append('{} downloaded to {}'.format(filename, subpath))
 
     else:
         if isinstance(site, ee.Feature) and property_name:
@@ -167,16 +179,27 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
         alert = mask(alert, vector_mask, raster_mask)
 
         # SKIP IF EMPTY ALERT
-        count = utils.histogram(alert, clas, geom).getInfo()
+        try:
+            count = utils.histogram(alert, clas, geom).getInfo()
+        except Exception as e:
+            msgs.append(str(e))
+            return msgs
+
         if count == 0:
+            msg = '{} has no alerts'.format(filename)
             if verbose:
-                print('{} has no alerts'.format(filename))
-            return None
+                print(msg)
+            msgs.append(msg)
+            return msgs
 
         if verbose:
             print('Downloading {} to {}'.format(filename, folder))
 
         _download(alert, geom, filename, extension, folder)
+
+        msgs.append('{} downloaded to {}'.format(filename, folder))
+
+    return msgs
 
 
 def toDrive(site, date, folder, clas, limit=1, smooth='max',

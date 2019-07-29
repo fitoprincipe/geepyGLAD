@@ -76,15 +76,15 @@ def get_rid_min_area(bool_image, limit):
     :param limit: all islands and holes less than this limit will be erased.
         This must be in m2.
     """
-    pixel_limit = get_pixel_limit(limit,
-                                  bool_image.projection().nominalScale())
+    area = ee.Image.pixelArea().rename('area')
 
-    # get connected pixels
+    # image = bool_image.addBands(area)
     conn = bool_image.connectedPixelCount(1000).rename('connected')
+    finalarea = area.multiply(conn)
 
     # get holes and islands
-    island = bool_image.eq(1).And(conn.lte(pixel_limit))
-    holes = bool_image.eq(0).And(conn.lte(pixel_limit))
+    island = bool_image.eq(1).And(finalarea.lte(limit))
+    holes = bool_image.eq(0).And(finalarea.lte(limit))
 
     # fill holes
     filled = bool_image.where(holes, 1)
@@ -92,6 +92,30 @@ def get_rid_min_area(bool_image, limit):
     no_island = filled.where(island, 0)
 
     return no_island
+
+
+def get_rid_islands(bool_image, limit, eightConnected=False):
+    """ Get rid of 'islands' and 'holes' less than the given limit param.
+
+    :param bool_image: The boolean image that will be use to detect islands and
+        holes. It must be boolean (ones and zeros)
+    :param limit: all islands and holes less than this limit will be erased.
+        This must be in m2.
+    """
+    area = ee.Image.pixelArea().rename('area')
+
+    conn = bool_image.connectedPixelCount(1024, eightConnected).rename('connected')
+    finalarea = area.multiply(conn)
+
+    # get holes and islands
+    island = bool_image.eq(1).And(finalarea.lte(limit))
+
+    # get rid island
+    no_island = bool_image.where(island, 0)
+
+    finalarea = finalarea.updateMask(no_island).unmask()
+
+    return no_island.addBands(finalarea)
 
 
 def smooth(image, algorithm='max'):

@@ -162,3 +162,46 @@ def get_confirmed(site, date, limit=1, smooth='max'):
 
     return ee.Image(ee.Algorithms.If(days.contains(day), final_masked,
                                      proxy(final)))
+
+
+def period(collection, start, end, site, year, limit, eightConnected=False):
+    """ Compute probable and confirmed alerts over a period """
+    if isinstance(site, [ee.Feature, ee.FeatureCollection]):
+        region = site.geometry()
+    else:
+        region = site
+
+    filtered = collection.filterBounds(region)
+    first = filtered.filterDate(ee.Date(start), ee.Date(start).advance(1, 'day')).first()
+    last = filtered.filterDate(ee.Date(end), ee.Date(end).advance(1, 'day')).first()
+
+    confband = 'conf{}'.format(str(year)[2:])
+    dateband = 'alertDate{}'.format(str(year)[2:])
+
+    firstconf = first.select(confband)
+    lastconf = last.select(confband)
+
+    diff = lastconf.subtract(firstconf)
+
+    probable = diff.eq(2).rename('probable')
+    confirmed = diff.eq(1).rename('confirmed')
+
+    probable = utils.get_rid_islands(probable, limit, eightConnected)
+    confirmed = utils.get_rid_islands(confirmed, limit, eightConnected)
+
+    area_probable = probable.select('area')
+    area_confirmed = confirmed.select('area')
+
+    probable = probable.select('probable')
+    confirmed = confirmed.select('confirmed')
+
+    area = area_probable.add(area_confirmed)
+
+    mask = area.gt(0)
+
+    date = tools.image.doyToDate(last.select(dateband), year=year).rename('date')
+    date = date.updateMask(mask).unmask()
+
+    final = probable.addBands([confirmed, area, date])
+
+    return final

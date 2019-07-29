@@ -9,6 +9,7 @@ import click
 import geepyGLAD as glad
 from datetime import date as dt
 import json
+import os
 
 @click.group()
 def main():
@@ -42,6 +43,11 @@ def alert(savein, verbose, clas, date, site, mask):
         destination = savein
     else:
         destination = config['saveTo']
+
+    soptions = ['drive', 'asset', 'local']
+
+    if destination not in soptions:
+        return 'savein parameter must be one of {}'.format(soptions)
 
     params = config[destination]
 
@@ -100,19 +106,41 @@ def alert(savein, verbose, clas, date, site, mask):
             folder=params['folder'],
         )
 
+        # create log file
+        logname = '{}{}_{}_{}_{}m2.txt'.format(
+            '_'.join(assetpath.split('/')[2:]),
+            '_'+propertyName or '_',
+            c,
+            alert_date,
+            limit
+        )
+        logpath = os.path.join('logs', logname)
+
+        if os.path.isfile(logpath):
+            perm = 'a'
+        else:
+            perm = 'w+'
+
         if mask == 'raster':
             args['raster_mask'] = raster_mask
         elif mask == 'vector':
             args['vector_mask'] = vector_mask
 
-        if destination == 'drive':
-            glad.batch.toDrive(**args)
-        if destination == 'asset':
-            glad.batch.toAsset(**args)
-        if destination == 'local':
-            args['subfolders'] = params['subfolders']
-            glad.batch.toLocal(**args)
+        try:
+            if destination == 'drive':
+                msgs = glad.batch.toDrive(**args)
+            if destination == 'asset':
+                msgs = glad.batch.toAsset(**args)
+            if destination == 'local':
+                args['subfolders'] = params['subfolders']
+                msgs = glad.batch.toLocal(**args)
+        except Exception as e:
+            msgs = [str(e)]
 
+        # write log
+        with open(logpath, perm) as log:
+            finalmsg = '\n'.join(msgs)
+            log.write(finalmsg)
 
 if __name__ == '__main__':
     main()
