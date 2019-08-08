@@ -3,6 +3,7 @@
 """ Util functions for GLAD alerts """
 
 import ee
+from geetools import tools
 import math
 
 
@@ -162,6 +163,65 @@ def make_vector(image, region):
     return vector
 
 
+def make_alerts_vector(alerts, region):
+    """ accepts the result from alerts.period function """
+    # band names
+    year = ee.Number(alerts.get('year'))
+    yearStr = year.format().slice(2,4)
+    dateB = ee.String('alertDate').cat(yearStr)
+    confB = ee.String('confirmed').cat(yearStr)
+    probB = ee.String('probable').cat(yearStr)
+    confDB = ee.String('confirmedDate').cat(yearStr)
+    probDB = ee.String('probableDate').cat(yearStr)
+
+    # period
+    start = ee.String(alerts.get('start_period'))
+    end = ee.String(alerts.get('end_period'))
+
+    # confirmed
+    confmask = alerts.select([confB])
+    confirmed = alerts.updateMask(confmask).select([dateB, confB, probDB, confDB])
+
+    # probable
+    probmask = alerts.select([probB])
+    probable = alerts.updateMask(probmask).select([dateB, probB, probDB, confDB])
+
+    # make individual vectors
+    vconf = make_vector(confirmed, region).map(
+        lambda feat: feat.set('class', 'confirmed'))
+    vprob = make_vector(probable, region).map(
+        lambda feat: feat.set('class', 'probable'))
+
+    def extractDate(d):
+        condition = d.neq(0)
+        def true(date):
+            datestr = ee.String(date.format())
+            y = datestr.slice(0, 4)
+            m = datestr.slice(4, 6)
+            d = datestr.slice(6, 8)
+            pattrn = '{y}-{m}-{d}'
+            replace = {'y':y, 'm':m, 'd':d}
+            return tools.string.format(pattrn, replace)
+        def false(date):
+            return date.format()
+
+        return ee.String(ee.Algorithms.If(condition, true(d), false(d)))
+
+    def updateDate(feat):
+        feat = feat.set('start_period', start).set('end_period', end)
+        date = extractDate(ee.Number(feat.get('label')))
+        confBand = extractDate(ee.Number(feat.get(confDB)))
+        probBand = extractDate(ee.Number(feat.get(probDB)))
+        feat = feat.set(dateB, date)
+        feat = feat.set(confDB, confBand)
+        feat = feat.set(probDB, probBand)
+        props = ee.List(['class', dateB, confDB, probDB,
+                         'start_period','end_period', 'area_m2'])
+        return feat.select(props)
+
+    return vconf.merge(vprob).map(updateDate)
+
+
 def dateFromDatetime(dt):
     """ ee.Date from datetime """
     return ee.Date(dt.isoformat())
@@ -176,3 +236,60 @@ def get_options(featureCollection, propertyName):
     options = featureCollection.iterate(wrap, ee.List([]))
 
     return ee.List(options).distinct()
+
+
+def get_bands(image, year=None):
+    """ Get confY and alertDateY bands from the given image """
+    if year:
+        year = ee.Algorithms.String(int(year))
+    else:
+        d = image.date()
+        yearInt = ee.Number(d.get('year'))
+        year = ee.Algorithms.String(yearInt)
+    yearStr = year.slice(2, 4)
+
+    confband = tools.string.format('conf{y}', {'y': yearStr})
+    dateband = tools.string.format('alertDate{y}', {'y': yearStr})
+
+    return ee.Dictionary(dict(conf=confband, alertDate=dateband, suffix=yearStr))
+
+
+def compute_breaks(col, year=None):
+    last = tools.imagecollection.getImage(col, -1)
+    bands = get_bands(last, year)
+    band = ee.String(bands.get('conf'))
+    suffix = ee.String(bands.get('suffix'))
+    prob = ee.String('probableDate').cat(suffix)
+    conf = ee.String('confirmedDate').cat(suffix)
+    det = ee.String('detectedDate').cat(suffix)
+
+    def makeBands(img):
+        probDate = tools.image.emptyCopy(img.select(0)).rename(prob)
+        confDate = tools.image.emptyCopy(img.select(0)).rename(conf)
+        detectedDate = tools.image.emptyCopy(img.select(0)).rename(det)
+        return img.addBands([probDate, confDate, detectedDate])
+
+    col = col.map(makeBands)
+
+    collist = col.toList(col.size())
+
+    def wrap(img, accum):
+        img = ee.Image(img)
+        accum = ee.List(accum)
+        before = ee.Algorithms.If(accum.size().eq(0),
+                                  ee.Image(collist.get(0)),
+                                  ee.Image(accum.get(-1)))
+        before = ee.Image(before)
+        diff = img.select(band).subtract(before.select(band)).rename('break')
+        probable = diff.eq(2)
+        confirmed = diff.eq(1)
+        detected = probable.Or(confirmed)
+        dateband = tools.date.makeDateBand(img)
+        probdate = dateband.where(probable.Not(), before.select(prob)).rename(prob)
+        confdate = dateband.where(confirmed.Not(), before.select(conf)).rename(conf)
+        detecteddate = dateband.where(detected.Not(), before.select(det)).rename(det)
+        newi = img.addBands([probdate, confdate, detecteddate], overwrite=True)
+        return accum.add(newi)
+
+    collist = ee.List(collist.iterate(wrap, ee.List([])))
+    return ee.ImageCollection.fromImages(collist)

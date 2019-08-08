@@ -164,27 +164,55 @@ def get_confirmed(site, date, limit=1, smooth='max'):
                                      proxy(final)))
 
 
-def period(collection, start, end, site, year, limit, eightConnected=False):
+def period(start, end, site, limit, year=None, eightConnected=False,
+           useProxy=False):
     """ Compute probable and confirmed alerts over a period """
-    if isinstance(site, [ee.Feature, ee.FeatureCollection]):
+
+    if isinstance(site, (ee.Feature, ee.FeatureCollection)):
         region = site.geometry()
     else:
         region = site
 
-    filtered = collection.filterBounds(region)
-    first = filtered.filterDate(ee.Date(start), ee.Date(start).advance(1, 'day')).first()
-    last = filtered.filterDate(ee.Date(end), ee.Date(end).advance(1, 'day')).first()
+    start = ee.Date(start)
+    end = ee.Date(end)
 
-    confband = 'conf{}'.format(str(year)[2:])
-    dateband = 'alertDate{}'.format(str(year)[2:])
+    filtered = ALERTS.filterBounds(region)
+    sort = filtered.sort('system:time_start', True) # sort ascending
+    filteredDate = sort.filterDate(start, end)
+
+    filteredDate = utils.compute_breaks(filteredDate, year)
+
+    # always get a last image
+    last = ee.Image(tools.imagecollection.getImage(filteredDate, -1))
+
+    bands = utils.get_bands(last, year)
+    confband = ee.String(bands.get('conf'))
+    dateband = ee.String(bands.get('alertDate'))
+    yearStr = ee.String(bands.get('suffix'))
+    if not year:
+        yearInt = ee.Number(end.get('year')).toInt()
+    else:
+        yearInt = ee.Number(year).toInt()
+
+    if useProxy:
+        proxy = tools.image.empty(0, last.bandNames())
+        first = proxy.copyProperties(source=last,
+                                     properties=['system:footprint']) \
+            .set('system:time_start', start.millis())
+        first = ee.Image(first)
+    else:
+        first = ee.Image(filteredDate.first())
 
     firstconf = first.select(confband)
     lastconf = last.select(confband)
 
     diff = lastconf.subtract(firstconf)
 
-    probable = diff.eq(2).rename('probable')
-    confirmed = diff.eq(1).rename('confirmed')
+    probname = ee.String('probable').cat(yearStr)
+    confname = ee.String('confirmed').cat(yearStr)
+
+    probable = diff.eq(2).rename(probname)
+    confirmed = diff.eq(1).Or(diff.eq(3)).rename(confname)
 
     probable = utils.get_rid_islands(probable, limit, eightConnected)
     confirmed = utils.get_rid_islands(confirmed, limit, eightConnected)
@@ -192,16 +220,32 @@ def period(collection, start, end, site, year, limit, eightConnected=False):
     area_probable = probable.select('area')
     area_confirmed = confirmed.select('area')
 
-    probable = probable.select('probable')
-    confirmed = confirmed.select('confirmed')
+    probable = probable.select(probname).selfMask()
+    confirmed = confirmed.select(confname).selfMask()
 
     area = area_probable.add(area_confirmed)
-
     mask = area.gt(0)
+    area = area.updateMask(mask)
 
-    date = tools.image.doyToDate(last.select(dateband), year=year).rename('date')
-    date = date.updateMask(mask).unmask()
+    date = tools.image.doyToDate(
+        last.select(dateband), year=yearInt).rename(ee.String('alertDate').cat(yearStr))
+    date = date.updateMask(mask)
 
-    final = probable.addBands([confirmed, area, date])
+    # detected
+    detected = last.select(ee.String('detectedDate').cat(yearStr))
+    detected = detected.updateMask(mask)
 
-    return final
+    # probable
+    probD = last.select(ee.String('probableDate').cat(yearStr))
+    probD = probD.updateMask(mask)
+
+    # confirmed
+    confD = last.select(ee.String('confirmedDate').cat(yearStr))
+    confD = confD.updateMask(mask)
+
+    final = probable.addBands([confirmed, area, date, detected, probD, confD])
+    dateformat = 'Y-MM-dd'
+
+    return final.set('start_period', first.date().format(dateformat)) \
+        .set('end_period', last.date().format(dateformat)) \
+        .set('year', yearInt)
