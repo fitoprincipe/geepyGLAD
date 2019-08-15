@@ -165,7 +165,7 @@ def get_confirmed(site, date, limit=1, smooth='max'):
 
 
 def period(start, end, site, limit, year=None, eightConnected=False,
-           useProxy=False):
+           useProxy=False, mask=None):
     """ Compute probable and confirmed alerts over a period """
 
     if isinstance(site, (ee.Feature, ee.FeatureCollection)):
@@ -177,6 +177,14 @@ def period(start, end, site, limit, year=None, eightConnected=False,
     end = ee.Date(end)
 
     filtered = ALERTS.filterBounds(region)
+
+    if mask:
+        if isinstance(mask, (ee.Image,)):
+            maski = mask
+        else:
+            maski = ee.Image(mask)
+        filtered = filtered.map(lambda img: img.updateMask(maski))
+
     sort = filtered.sort('system:time_start', True) # sort ascending
     filteredDate = sort.filterDate(start, end)
 

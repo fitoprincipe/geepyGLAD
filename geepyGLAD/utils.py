@@ -95,7 +95,7 @@ def get_rid_min_area(bool_image, limit):
     return no_island
 
 
-def get_rid_islands(bool_image, limit, eightConnected=False):
+def get_rid_islands(bool_image, limit, scale=30, eightConnected=False):
     """ Get rid of 'islands' and 'holes' less than the given limit param.
 
     :param bool_image: The boolean image that will be use to detect islands and
@@ -105,7 +105,13 @@ def get_rid_islands(bool_image, limit, eightConnected=False):
     """
     area = ee.Image.pixelArea().rename('area')
 
-    conn = bool_image.connectedPixelCount(1024, eightConnected).rename('connected')
+    scale = ee.Number(scale)
+    limit = ee.Number(limit)
+
+    count = limit.divide(scale.pow(2)).multiply(1.1)
+    count = count.round()
+
+    conn = bool_image.connectedPixelCount(512, eightConnected).rename('connected')
     finalarea = area.multiply(conn)
 
     # get holes and islands
