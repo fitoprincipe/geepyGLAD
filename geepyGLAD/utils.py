@@ -261,6 +261,8 @@ def get_bands(image, year=None):
 
 
 def compute_breaks(col, year=None):
+    """ Compute brake dates. From nothing to 'probable' and from 'probable' to
+    'confirmed' """
     last = tools.imagecollection.getImage(col, -1)
     bands = get_bands(last, year)
     band = ee.String(bands.get('conf'))

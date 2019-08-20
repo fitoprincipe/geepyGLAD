@@ -257,3 +257,24 @@ def period(start, end, site, limit, year=None, eightConnected=False,
     return final.set('start_period', first.date().format(dateformat)) \
         .set('end_period', last.date().format(dateformat)) \
         .set('year', yearInt)
+
+
+def oneday(date, site, limit, year=None, eightConnected=False, mask=None):
+    """ Compute alerts for one day. Takes the last available alerts and the
+    alerts 1 step before """
+    date = ee.Date(date)
+
+    if isinstance(site, (ee.Feature, ee.FeatureCollection)):
+        region = site.geometry()
+    else:
+        region = site
+
+    col = ALERTS.filterBounds(region)
+    col = col.filterDate(ee.Date('1970-01-01'), date.advance(1, 'day'))
+
+    last = tools.imagecollection.getImage(col, -1)
+    before = tools.imagecollection.getImage(col, -2)
+
+    return period(before.date(), last.date().advance(1,'day'), site, limit,
+                  year, eightConnected=eightConnected, mask=mask)
+
