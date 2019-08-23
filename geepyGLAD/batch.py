@@ -11,7 +11,8 @@ from geetools import batch as gbatch
 
 FUNCTIONS = {
     'probable': alerts.get_probable,
-    'confirmed': alerts.get_confirmed
+    'confirmed': alerts.get_confirmed,
+    'both': alerts.oneday
 }
 
 
@@ -65,7 +66,8 @@ def downloadFile(url, name, ext, path=None):
 
 def _download(image, region, name, extension='JSON', path=None, verbose=True):
 
-    vector = utils.make_vector(image, region)
+    # vector = utils.make_vector(image, region)
+    vector = utils.make_alerts_vector(image, region)
 
     if extension in ['JSON', 'json', 'geojson', 'geoJSON']:
         try:
@@ -97,17 +99,24 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
         'KML': 'kml',
         'CSV': 'csv'
     }
+    errors = []
 
-    if clas not in ['probable', 'confirmed']:
-        clas = 'confirmed'
+    if clas not in ['probable', 'confirmed', 'both']:
+        clas = 'both'
 
-    basename = '{}_alert_for'.format(clas)
+    # BASE NAME FOR OUTPUT FILE
+    if clas == 'both':
+        basename = 'alerts_for'
+    else:
+        basename = '{}_alerts_for'.format(clas)
 
+    # GET SITE
     if isinstance(site, (ee.FeatureCollection, ee.Feature)):
         geom = site.geometry()
     else:
         geom = site
 
+    # MANAGE ALERTS PATH
     if folder is None:
         folder = os.path.join(os.getcwd(), 'alerts')
 
@@ -117,8 +126,8 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             print('creating {}'.format(folder))
         os.mkdir(folder)
 
-    errors = []
-
+    # START PROCESS
+    # If it is a FeatureCollection and there is a property name
     if isinstance(site, ee.FeatureCollection) and property_name:
         names = utils.get_options(site, property_name)
         names_cli = names.getInfo()
@@ -128,8 +137,8 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             region = site.filterMetadata(
                 property_name, 'equals', name).first().geometry()
 
-            alert = FUNCTIONS[clas](region, date, limit, smooth)
-            alert = mask(alert, vector_mask, raster_mask)
+            alert = FUNCTIONS[clas](region, date, limit, mask=raster_mask)#, smooth)
+            # alert = mask(alert, vector_mask, raster_mask)
 
             # SKIP IF EMPTY ALERT
             try:
@@ -167,7 +176,7 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
                 continue
             else:
                 msgs.append('{} downloaded to {}'.format(filename, subpath))
-
+    # If NOT
     else:
         if isinstance(site, ee.Feature) and property_name:
             name = ee.String(site.get(property_name)).getInfo()
@@ -175,8 +184,8 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
         else:
             filename = '{}_{}'.format(basename, date)
 
-        alert = FUNCTIONS[clas](geom, date, limit, smooth)
-        alert = mask(alert, vector_mask, raster_mask)
+        alert = FUNCTIONS[clas](geom, date, limit)#, smooth)
+        # alert = mask(alert, vector_mask, raster_mask)
 
         # SKIP IF EMPTY ALERT
         try:
