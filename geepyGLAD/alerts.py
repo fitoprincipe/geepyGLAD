@@ -70,7 +70,7 @@ def last_probable_mask(collection, year):
     return last.addBands(probable).updateMask(probable).unmask()
 
 
-def get_probable(site, date, limit=1, smooth='max'):
+def get_probable_OLD(site, date, limit=1, smooth='max'):
     """ Get the 'probable' mask for the given site and date """
     try:
         site = site.geometry()
@@ -123,7 +123,7 @@ def get_probable(site, date, limit=1, smooth='max'):
                                      proxy(final)))
 
 
-def get_confirmed(site, date, limit=1, smooth='max'):
+def get_confirmed_OLD(site, date, limit=1, smooth='max'):
     date = ee.Date(date)
     year = date.get('year')
     month = date.get('month')
@@ -259,7 +259,7 @@ def period(start, end, site, limit, year=None, eightConnected=False,
         .set('year', yearInt)
 
 
-def oneday(date, site, limit, year=None, eightConnected=False, mask=None):
+def oneday(site, date, limit=500, year=None, eightConnected=False, mask=None):
     """ Compute alerts for one day. Takes the last available alerts and the
     alerts 1 step before """
     date = ee.Date(date)
@@ -278,3 +278,16 @@ def oneday(date, site, limit, year=None, eightConnected=False, mask=None):
     return period(before.date(), last.date().advance(1,'day'), site, limit,
                   year, eightConnected=eightConnected, mask=mask)
 
+
+def get_probable(site, date, limit=500, eightConnected=False, mask=None):
+    """ Get only probable alerts """
+    alerts = oneday(site, date, limit, eightConnected, mask)
+    probable_mask = alerts.select('probable')
+    return alerts.updateMask(probable_mask)
+
+
+def get_confirmed(site, date, limit=500, eightConnected=False, mask=None):
+    """ Get only confirmed alerts """
+    alerts = oneday(site, date, limit, eightConnected, mask)
+    probable_mask = alerts.select('confirmed')
+    return alerts.updateMask(probable_mask)
