@@ -92,7 +92,7 @@ def _download(image, region, name, extension='JSON', path=None, verbose=True,
 
 def toLocal(site, date, clas, limit=1, property_name=None,
             folder=None, extension='JSON', subfolders=True, verbose=True,
-            vector_mask=None, raster_mask=None, logger=None):
+            raster_mask=None, logger=None):
     """ Download probable alert vector. Parameter `site` can be a
     FeatureCollection in which case will be splitted with `property_name`
     parameter
@@ -201,7 +201,7 @@ def toLocal(site, date, clas, limit=1, property_name=None,
             name = 'N/A'
             filename = '{}_{}'.format(basename, date)
 
-        alert = FUNCTIONS[clas](geom, date, limit)
+        alert = FUNCTIONS[clas](geom, date, limit, mask=raster_mask)
 
         # SKIP IF EMPTY ALERT
         try:
