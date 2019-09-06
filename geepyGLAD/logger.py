@@ -13,6 +13,10 @@ class Logger(object):
             self.path = os.getcwd()
         else:
             self.path = os.path.join(os.getcwd(), folder)
+            exists = os.path.exists(self.path)
+            if not exists:
+                os.mkdir(self.path)
+
         self.filetype = filetype
         if filetype == 'txt':
             name = '{}.txt'.format(self.name)
