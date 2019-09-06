@@ -26,7 +26,7 @@ CONFIG = {
         'subfolders': True,
         'format': 'JSON'
     },
-    'saveTo': 'drive'
+    'saveTo': 'local'
 }
 
 HEADER = """Config file:
