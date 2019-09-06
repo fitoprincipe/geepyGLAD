@@ -81,9 +81,9 @@ def _download(image, region, name, extension='JSON', path=None, verbose=True):
         print('Format {} not supported'.format(extension))
 
 
-def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
+def toLocal(site, date, clas, limit=1, property_name=None,
             folder=None, extension='JSON', subfolders=True, verbose=True,
-            vector_mask=None, raster_mask=None):
+            vector_mask=None, raster_mask=None, logger=None):
     """ Download probable alert vector. Parameter `site` can be a
     FeatureCollection in which case will be splitted with `property_name`
     parameter
@@ -91,15 +91,16 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
     msgs = []
 
     if not utils.has_image(date, alerts.ALERTS).getInfo():
-        msgs.append('GLAD alerts not available for date {}'.format(date))
-        return msgs
+        msg = 'GLAD alerts not available for date {}'.format(date)
+        if logger:
+             logger.log(msg)
+        return None
 
     extensions = {
         'JSON': 'geoJSON',
         'KML': 'kml',
         'CSV': 'csv'
     }
-    errors = []
 
     if clas not in ['probable', 'confirmed', 'both']:
         clas = 'both'
@@ -137,21 +138,23 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             region = site.filterMetadata(
                 property_name, 'equals', name).first().geometry()
 
-            alert = FUNCTIONS[clas](region, date, limit, mask=raster_mask)#, smooth)
-            # alert = mask(alert, vector_mask, raster_mask)
+            alert = FUNCTIONS[clas](region, date, limit, mask=raster_mask)
 
             # SKIP IF EMPTY ALERT
             try:
                 count = utils.histogram(alert, clas, region).getInfo()
             except Exception as e:
-                msgs.append(str(e))
-                count = 0
+                msg = '{}: ERROR getting histogram - {}'.format(name, e)
+                if logger:
+                    logger.log(msg)
                 continue
 
             if count == 0:
+                msg = '{}: no alerts'.format(name)
                 if verbose:
-                    print('{} has no alerts, skipping..'.format(filename))
-                msgs.append('{} has no alerts'.format(filename))
+                    print(msg)
+                if logger:
+                    logger.log(msg)
                 continue
 
             if subfolders:
@@ -163,19 +166,23 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
             else:
                 subpath = folder
 
+            msg = '{}: Downloading "{}" to "{}"'.format(name, filename, subpath)
             if verbose:
-                print('Downloading {} to {}'.format(filename, subpath))
+                print(msg)
+            if logger:
+                logger.log(msg)
 
             try:
                 _download(alert, region, filename, extension, subpath)
             except Exception as e:
-                print('ERROR in {}'.format(filename))
-                print(str(e))
-                msgs.append(str(e))
-                errors.append(filename)
+                msg = '{}: ERROR writing {}'.format(name, filename)
+                if logger:
+                    logger.log(msg)
                 continue
             else:
-                msgs.append('{} downloaded to {}'.format(filename, subpath))
+                msg = '{}: "{}" downloaded to "{}"'.format(name, filename, subpath)
+                if logger:
+                    logger.log(msg)
     # If NOT
     else:
         if isinstance(site, ee.Feature) and property_name:
@@ -184,39 +191,51 @@ def toLocal(site, date, clas, limit=1, smooth='max', property_name=None,
         else:
             filename = '{}_{}'.format(basename, date)
 
-        alert = FUNCTIONS[clas](geom, date, limit)#, smooth)
-        # alert = mask(alert, vector_mask, raster_mask)
+        alert = FUNCTIONS[clas](geom, date, limit)
 
         # SKIP IF EMPTY ALERT
         try:
             count = utils.histogram(alert, clas, geom).getInfo()
         except Exception as e:
-            msgs.append(str(e))
-            return msgs
+            msg = 'ERROR getting histogram - {}'.format(e)
+            if logger:
+                logger.log(msg)
+            return None
 
         if count == 0:
             msg = '{} has no alerts'.format(filename)
             if verbose:
                 print(msg)
-            msgs.append(msg)
-            return msgs
+            if logger:
+                logger.log(msg)
+            return None
 
         if verbose:
             print('Downloading {} to {}'.format(filename, folder))
 
-        _download(alert, geom, filename, extension, folder)
-
-        msgs.append('{} downloaded to {}'.format(filename, folder))
-
-    return msgs
+        try:
+            _download(alert, geom, filename, extension, folder)
+        except Exception as e:
+            msg = 'ERROR writing {}'.format(filename)
+            if logger:
+                logger.log(msg)
+        else:
+            msg = '{} downloaded to {}'.format(filename, folder)
+            if logger:
+                logger.log(msg)
 
 
 def toDrive(site, date, folder, clas, limit=1, smooth='max',
             extension='GeoJSON', property_name=None,
-            verbose=True, vector_mask=None, raster_mask=None):
+            verbose=True, vector_mask=None, raster_mask=None,
+            logger=None):
     """ Upload probable/confirmed alerts to Google Drive """
     if not utils.has_image(date, alerts.ALERTS).getInfo():
-        print('GLAD alerts not available for date {}'.format(date))
+        msg = 'GLAD alerts not available for date {}'.format(date)
+        if verbose:
+            print(msg)
+        if logger:
+            logger.log(msg)
         return None
 
     date = ee.Date(date)
@@ -250,8 +269,11 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
             # SKIP IF EMPTY ALERT
             count = utils.histogram(alert, clas, region).getInfo()
             if count == 0:
+                msg = '{} has no alerts, skipping..'.format(filename)
                 if verbose:
-                    print('{} has no alerts, skipping..'.format(filename))
+                    print(msg)
+                if logger:
+                    logger.log(msg)
                 continue
 
             vector = utils.make_vector(alert, region)
@@ -263,15 +285,18 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
                                                      folder, filename,
                                                      extension)
                 task.start()
-
+                msg = 'uploading {} to {} in GDrive'.format(filename, folder)
                 if verbose:
-                    print('uploading {} to {} in GDrive'.format(filename,
-                                                                folder))
+                    print(msg)
+                if logger:
+                    logger.log(msg)
 
             except Exception as e:
+                msg = 'ERROR writing {} - {}'.format(filename, e)
                 if verbose:
-                    print('ERROR in {}'.format(filename))
-                    print(str(e))
+                    print(msg)
+                if logger:
+                    logger.log(msg)
                 continue
     elif isinstance(site, ee.Feature) and property_name:
         sitename = ee.String(site.get(property_name)).getInfo()
@@ -285,8 +310,11 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
         # SKIP IF EMPTY ALERT
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
+            msg = '{} has no alerts'.format(name)
             if verbose:
-                print('{} has no alerts'.format(name))
+                print(msg)
+            if logger:
+                logger.log(msg)
             return None
 
         vector = utils.make_vector(alert, geom)
@@ -294,8 +322,11 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
         task = ee.batch.Export.table.toDrive(vector, name, folder, name,
                                              extension)
         task.start()
+        msg = 'uploading {} to {} in GDrive'.format(name, folder)
         if verbose:
-            print('uploading {} to {} in GDrive'.format(name, folder))
+            print(msg)
+        if logger:
+            logger.log(msg)
     else:
         # alert
         alert = FUNCTIONS[clas](geom, date, limit, smooth)
@@ -304,24 +335,34 @@ def toDrive(site, date, folder, clas, limit=1, smooth='max',
         # SKIP IF EMPTY ALERT
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
+            msg = '{} has no alerts'.format(name)
             if verbose:
-                print('{} has no alerts'.format(name))
+                print(msg)
+            if logger:
+                logger.log(msg)
             return None
 
         vector = utils.make_vector(alert, geom)
         task = ee.batch.Export.table.toDrive(vector, name, folder, name,
                                              extension)
         task.start()
+        msg = 'uploading {} to {} in GDrive'.format(name, folder)
         if verbose:
-            print('uploading {} to {} in GDrive'.format(name, folder))
+            print(msg)
+        if logger:
+            logger.log(msg)
 
 
 def toAsset(site, date, folder, clas, limit=1, smooth='max',
             property_name=None, verbose=True, vector_mask=None,
-            raster_mask=None):
+            raster_mask=None, logger=None):
     """ Upload probable/confirmed alerts to Google Drive """
     if not utils.has_image(date, alerts.ALERTS).getInfo():
-        print('GLAD alerts not available for date {}'.format(date))
+        msg = 'GLAD alerts not available for date {}'.format(date)
+        if verbose:
+            print(msg)
+        if logger:
+            logger.log(msg)
         return None
 
     user = ee.data.getAssetRoots()[0]['id']
@@ -359,8 +400,11 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
             # SKIP IF EMPTY ALERT
             count = utils.histogram(alert, clas, region).getInfo()
             if count == 0:
+                msg = '{} has no alerts, skipping..'.format(filename)
                 if verbose:
-                    print('{} has no alerts, skipping..'.format(filename))
+                    print(msg)
+                if logger:
+                    logger.log(msg)
                 continue
 
             vector = utils.make_vector(alert, region)
@@ -370,16 +414,18 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
             try:
                 task = ee.batch.Export.table.toAsset(vector, n, assetId)
                 task.start()
-
+                msg = 'uploading {} to {} in Assets'.format(filename, path)
                 if verbose:
-                    print('uploading {} to {} in Assets'.format(filename,
-                                                                path))
+                    print(msg)
+                if logger:
+                    logger.log(msg)
 
             except Exception as e:
+                msg = 'ERROR in {} to {} in Assets - {}'.format(filename, path, e)
                 if verbose:
-                    print('ERROR in {} to {} in Assets'.format(filename,
-                                                               path))
-                    print(str(e))
+                    print(msg)
+                if logger:
+                    logger.log(msg)
                 continue
 
     elif isinstance(site, ee.Feature) and property_name:
@@ -395,13 +441,19 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
         # SKIP IF EMPTY ALERT
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
+            msg = '{} has no alerts'.format(filename)
             if verbose:
-                print('{} has no alerts'.format(filename))
+                print(msg)
+            if logger:
+                logger.log(msg)
             return None
 
         gbatch.Export.table.toAsset(vector, path, filename)
+        msg = 'uploading {} to {} in Assets'.format(filename, path)
         if verbose:
-            print('uploading {} to {} in Assets'.format(filename, path))
+            print(msg)
+        if logger:
+            logger.log(msg)
     else:
         # alert
         alert = FUNCTIONS[clas](geom, date, limit, smooth)
@@ -411,10 +463,16 @@ def toAsset(site, date, folder, clas, limit=1, smooth='max',
         # SKIP IF EMPTY ALERT
         count = utils.histogram(alert, clas, geom).getInfo()
         if count == 0:
+            msg = '{} has no alerts'.format(name)
             if verbose:
-                print('{} has no alerts'.format(name))
+                print(msg)
+            if logger:
+                logger.log(msg)
             return None
 
         gbatch.Export.table.toAsset(vector, path, name)
+        msg = 'uploading {} to {} in Assets'.format(name, path)
         if verbose:
-            print('uploading {} to {} in Assets'.format(name, path))
+            print(msg)
+        if logger:
+            logger.log(msg)
