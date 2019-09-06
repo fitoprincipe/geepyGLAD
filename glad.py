@@ -232,7 +232,8 @@ def alert(savein, clas, date, site, mask, verbose, config):
         clas = config['class']
 
     # RUN COMMAND AND HASH
-    command = 'glad alert -s {} -c {} -d {} -m {} -v {}'.format(savein, clas, date, mask, verbose)
+    command = 'glad alert -s {} -c {} -d {} -m {} -v {}'.format(
+        savein, clas, date, mask, verbose)
     if usersite:
         command += ' --site {}'.format(usersite)
 
