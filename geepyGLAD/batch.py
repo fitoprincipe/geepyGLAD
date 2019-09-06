@@ -64,19 +64,28 @@ def downloadFile(url, name, ext, path=None):
     return handle
 
 
-def _download(image, region, name, extension='JSON', path=None, verbose=True):
-
-    # vector = utils.make_vector(image, region)
+def _download(image, region, name, extension='JSON', path=None, verbose=True,
+              logger=None):
     vector = utils.make_alerts_vector(image, region)
 
     if extension in ['JSON', 'json', 'geojson', 'geoJSON']:
         try:
             gbatch.Download.table.toGeoJSON(vector, name, path)
         except Exception as e:
+            msg = 'Download method failed: {} \n\ntrying another method...'.format(e)
             if verbose:
-                msg = 'Download method failed: \n {} \n, trying another method...'
-                print(msg.format(e))
-            gbatch.Download.table.toLocal(vector, name, 'JSON')
+                print(msg)
+            if logger:
+                logger.log(msg)
+            try:
+                gbatch.Download.table.toLocal(vector, name, 'geojson',
+                                              path=path)
+            except Exception as e:
+                msg = "Download failed: {}".format(e)
+                if verbose:
+                    print(msg)
+                if logger:
+                    logger.log(msg)
     else:
         print('Format {} not supported'.format(extension))
 
@@ -124,7 +133,7 @@ def toLocal(site, date, clas, limit=1, property_name=None,
     # make path if not present
     if not os.path.isdir(folder):
         if verbose:
-            print('creating {}'.format(folder))
+            print('creating {} folder'.format(folder))
         os.mkdir(folder)
 
     # START PROCESS
@@ -189,6 +198,7 @@ def toLocal(site, date, clas, limit=1, property_name=None,
             name = ee.String(site.get(property_name)).getInfo()
             filename = '{}_{}_{}'.format(basename, date, name)
         else:
+            name = 'N/A'
             filename = '{}_{}'.format(basename, date)
 
         alert = FUNCTIONS[clas](geom, date, limit)
@@ -197,13 +207,13 @@ def toLocal(site, date, clas, limit=1, property_name=None,
         try:
             count = utils.histogram(alert, clas, geom).getInfo()
         except Exception as e:
-            msg = 'ERROR getting histogram - {}'.format(e)
+            msg = '{}: ERROR getting histogram - {}'.format(name, e)
             if logger:
                 logger.log(msg)
             return None
 
         if count == 0:
-            msg = '{} has no alerts'.format(filename)
+            msg = '{}: no alerts'.format(name)
             if verbose:
                 print(msg)
             if logger:
@@ -211,16 +221,16 @@ def toLocal(site, date, clas, limit=1, property_name=None,
             return None
 
         if verbose:
-            print('Downloading {} to {}'.format(filename, folder))
+            print('{}: Downloading "{}" to "{}"'.format(name, filename, folder))
 
         try:
             _download(alert, geom, filename, extension, folder)
         except Exception as e:
-            msg = 'ERROR writing {}'.format(filename)
+            msg = '{}: ERROR writing {}'.format(name, filename)
             if logger:
                 logger.log(msg)
         else:
-            msg = '{} downloaded to {}'.format(filename, folder)
+            msg = '{}: "{}" downloaded to "{}"'.format(name, filename, folder)
             if logger:
                 logger.log(msg)
 
