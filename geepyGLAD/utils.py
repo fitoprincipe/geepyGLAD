@@ -175,8 +175,13 @@ def histogram(alert, clas, region=None):
         'maxPixels': 1e13
     })
 
-    result = result.get('result')
-    count = ee.Number(ee.Dictionary(result).get('1'))
+    result = ee.Dictionary(result.get('result'))
+    count = ee.Number(
+        ee.Algorithms.If(
+            result.contains('1'),
+            result.get('1'),
+            0)
+    )
     return count
 
 
