@@ -206,7 +206,7 @@ def period(start, end, site, limit, year=None, eightConnected=False,
         proxy = tools.image.empty(0, last.bandNames())
         first = proxy.copyProperties(source=last,
                                      properties=['system:footprint']) \
-            .set('system:time_start', start.millis())
+                     .set('system:time_start', start.millis())
         first = ee.Image(first)
     else:
         first = ee.Image(filteredDate.first())
