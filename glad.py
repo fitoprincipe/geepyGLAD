@@ -303,15 +303,7 @@ def alert(savein, clas, date, site, mask, verbose, config):
 
     # COMPUTE ALERTS
     try:
-        if destination == 'drive':
-            batch.toDrive(**args)
-        elif destination == 'asset':
-            batch.toAsset(**args)
-        elif destination == 'local':
-            args['subfolders'] = save_params['subfolders']
-            batch.toLocal(**args)
-        else:
-            raise ValueError('destination {} not allowed'.format(destination))
+        batch.download(**args, destination=destination)
     except Exception as e:
         msg = 'ERROR: {}'.format(str(e))
         logger.log(msg)
