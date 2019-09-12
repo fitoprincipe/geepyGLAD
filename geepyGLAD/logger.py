@@ -39,8 +39,11 @@ class Logger(object):
         t = datetime.datetime.today().isoformat()
         msg = '{time} - {msg}\n'.format(time=t, msg=message)
         self._logs.append(msg)
-        with open(self.filename, 'a+') as f:
-            f.write(msg)
+        with open(self.filename, 'ab+') as f:
+            try:
+                f.write(msg.encode('utf-8'))
+            except Exception as e:
+                raise e
 
     def text(self):
         """ get the log message as a string """
