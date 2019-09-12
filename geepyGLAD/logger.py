@@ -43,7 +43,7 @@ class Logger(object):
             try:
                 f.write(msg)
             except UnicodeEncodeError:
-                f.write(msg.encode('utf-8'))
+                f.write(msg.encode('utf-8').decode())
             except Exception as e:
                 f.write(str(e))
 
