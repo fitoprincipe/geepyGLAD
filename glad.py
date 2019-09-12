@@ -80,6 +80,7 @@ def make_config():
     def create(name):
         with open(name, 'w') as f:
             json.dump(CONFIG, f, indent=2)
+        print('{} file has been created into {}'.format(name, os.getcwd()))
 
     fname = 'config.json'
 
@@ -133,7 +134,12 @@ def update_config(parameter, value):
     fname = 'config.json'
     exists = os.path.isfile(fname)
     if not exists:
-        make_config()
+        msg = 'Do you want to create a configuration file in {}'
+        make = click.prompt(msg.format(os.getcwd()), default=False)
+        if make:
+            make_config()
+        else:
+            return None
 
     # load config file
     with open('config.json', 'r') as conf:
@@ -186,6 +192,113 @@ def sites():
 
     options = site.aggregate_array(prop)
     print(options.getInfo())
+
+
+@main.command()
+@click.argument('start')#, help='Start date for the period')
+@click.argument('end')#, help='Start date for the period')
+@click.option('--proxy', default=False, help='use proxy? If True start date will be dismissed')
+@click.option('-s', '--savein', default=None, help='where to save the files. Takes default from config.json')
+@click.option('--site', default=None, help='The name of the site to process, must be present in the parsed property')
+@click.option('-m', '--mask', default=True, type=bool, help='Whether to use the mask in config file or not')
+@click.option('-v', '--verbose', default=True, type=bool)
+@click.option('--config', default=None, help='The name of the configuration file. Defaults to "config.json"')
+def period(start, end, proxy, savein, site, mask, verbose, config):
+    """ Export a period (from START to END) of GLAD alerts to Google Drive,
+    Earth Engine Asset or Local files. Takes configuration parameters from
+    `config.json`.
+    """
+    # LOAD CONFIG FILE
+    configname = config  # change variable name
+    if not configname:
+        configname = 'config.json'
+
+    config = load_config(configname)
+    if not config: return None
+
+    # SITE PARAMS
+    site_params = config['site']
+    asset_path = site_params['assetPath']
+    property_name = site_params['propertyName']
+    usersite = site  # change variable name
+
+    # SAVE PARAMS
+    destination = savein or config['saveTo']
+    save_params = config[destination]
+    soptions = ['drive', 'asset', 'local']
+
+    # MIN AREA
+    limit = config['minArea']
+
+    # RUN COMMAND AND HASH
+    command = 'glad period {} {} --proxy {} -s {} -m {} -v {}'.format(
+        start, end, proxy, savein, mask, verbose)
+    if usersite:
+        command += ' --site {}'.format(usersite)
+
+    config_str = json.dumps(config, indent=2)
+    tohash = '{} {}'.format(config_str, command)
+    tohash = tohash.encode('utf-8')
+    import hashlib
+    h = hashlib.sha256()
+    h.update(tohash)
+    hexcode = h.hexdigest()
+    logname = 'period {} to {} {}'.format(start, end, hexcode)
+
+    header = HEADER.format(config_str, command)
+
+    # LOGGER
+    from geepyGLAD.logger import Logger
+    logdir = 'logs'
+    logger = Logger(logname, logdir)
+
+    logger.header(header)
+
+    if destination not in soptions:
+        msg = 'savein parameter must be one of {}'.format(soptions)
+        logger.log(msg)
+        print(msg)
+        return None
+
+    # INITIALIZE EE
+    import ee
+    initEE(logger)
+    try:
+        from geepyGLAD import utils, alerts, batch
+    except Exception as e:
+        msg = 'ERROR while importing geepyGLAD - {}'.format(e)
+        logger.log(msg)
+        raise e
+
+    site = ee.FeatureCollection(asset_path)
+
+    if usersite:
+        site = site.filterMetadata(property_name, 'equals', usersite)
+        site = ee.Feature(site.first())
+
+    args = dict(
+        start=start,
+        end=end,
+        site=site,
+        limit=limit,
+        property_name=property_name,
+        verbose=verbose,
+        folder=save_params['folder'],
+        logger=logger
+    )
+
+    raster_mask_id = config['rasterMask']
+    if raster_mask_id and mask:
+        raster_mask = ee.Image(raster_mask_id)
+        args['raster_mask'] = raster_mask
+
+    # COMPUTE ALERTS
+    try:
+        batch.period(**args, destination=destination)
+    except Exception as e:
+        msg = 'ERROR: {}'.format(str(e))
+        logger.log(msg)
+        raise e
 
 
 @main.command()

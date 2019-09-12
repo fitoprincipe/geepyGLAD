@@ -137,24 +137,6 @@ def smooth(image, algorithm='max'):
     return result.set('system:time_start', image.date().millis())
 
 
-def histogram_OLD(alert, clas, region=None):
-    """ Return the number of pixels equal one in the given region """
-    if not region:
-        region = alert.geometry()
-
-    result = alert.select(clas).reduceRegion(**{
-        'reducer': ee.Reducer.fixedHistogram(0, 2, 2),
-        'geometry': region,
-        'scale': alert.projection().nominalScale(),
-        'maxPixels': 1e13
-    })
-
-    result = result.get(clas)
-    count = ee.Number(ee.Algorithms.If(
-        result, ee.Array(result).get([1, 1]), 0))
-    return count
-
-
 def histogram(alert, clas, region=None):
     """ Return the number of pixels equal one in the given region """
     if not region:

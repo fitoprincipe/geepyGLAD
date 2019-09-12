@@ -12,7 +12,8 @@ from geetools import batch as gbatch
 FUNCTIONS = {
     'probable': alerts.get_probable,
     'confirmed': alerts.get_confirmed,
-    'both': alerts.oneday
+    'both': alerts.oneday,
+    'period': alerts.period
 }
 
 
@@ -200,6 +201,46 @@ def _are_alerts(alert, name, clas, region, verbose, logger):
         return True
 
 
+def _process_period(start, end, geometry, limit, year=None,
+                    eightConnected=False, useProxy=False, mask=None,
+                    destination='local', name=None, folder=None, **kwargs):
+    verbose = kwargs.get('verbose', True)
+    logger = kwargs.get('logger', None)
+
+    try:
+        alert = FUNCTIONS['period'](start, end, geometry, limit, year,
+                                    eightConnected, useProxy, mask)
+    except Exception as e:
+        msg = 'ERROR while getting period alert {} to {}'.format(start, end)
+        if verbose:
+            print(msg)
+        if logger:
+            logger.log(msg)
+        raise e
+
+    are_alerts = _are_alerts(alert, name, 'both', geometry, **kwargs)
+    if not are_alerts:
+        return None
+    
+    filename = '{}_{}_to_{}'.format(name, start, end)
+
+    vector = utils.make_alerts_vector(alert, geometry)
+    # LOCAL
+    if destination == 'local':
+        subfolders = kwargs.get('subfolders', True)
+        ext = kwargs.get('extension', 'geojson')
+        _toLocal(vector, filename, folder, ext, subfolders,
+                 name, **kwargs)
+
+    elif destination == 'drive':
+        filename = filename.encode().decode('ascii', errors='ignore')
+        ext = kwargs.get('extension', 'geojson')
+        _toDrive(vector, filename, folder, ext, **kwargs)
+
+    elif destination == 'asset':
+        _toAsset(vector, filename, folder, **kwargs)
+
+
 def _process(geometry, date, clas, limit, folder, raster_mask, destination,
              filename,  name, **kwargs):
     verbose = kwargs.get('verbose', True)
@@ -235,6 +276,43 @@ def _process(geometry, date, clas, limit, folder, raster_mask, destination,
 
     elif destination == 'asset':
         _toAsset(vector, filename, folder, **kwargs)
+
+
+def period(site, start, end, limit, proxy=False, eightConnected=False,
+           folder=None, property_name=None, raster_mask=None,
+           destination='local', verbose=True, logger=None):
+    """ General download function for a period """   
+
+    args = dict(verbose=verbose, logger=logger)
+
+    # START PROCESS
+    # If it is a FeatureCollection and there is a property name
+    if isinstance(site, ee.FeatureCollection) and property_name:
+        names = utils.get_options(site, property_name)
+        names_cli = names.getInfo()
+        for name in names_cli:
+
+            geom = site.filterMetadata(
+                property_name, 'equals', name).first().geometry()
+
+            _process_period(start, end, geom, limit, None, eightConnected,
+                            proxy, raster_mask, destination, name, folder,
+                            **args)
+    else:
+        if isinstance(site, ee.Feature) and property_name:
+            name = ee.String(site.get(property_name)).getInfo()
+        else:
+            name = 'N/A'
+
+        # GET GEOMETRY
+        if isinstance(site, (ee.FeatureCollection, ee.Feature)):
+            geom = site.geometry()
+        else:
+            geom = site
+
+        _process_period(start, end, geom, limit, None, eightConnected,
+                        proxy, raster_mask, destination, name, folder,
+                        **args)
 
 
 def download(site, date, clas, limit, folder=None, property_name=None,
