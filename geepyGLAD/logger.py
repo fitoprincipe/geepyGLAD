@@ -40,7 +40,12 @@ class Logger(object):
         msg = '{time} - {msg}\n'.format(time=t, msg=message)
         self._logs.append(msg)
         with open(self.filename, 'a+') as f:
-            f.write(msg)
+            try:
+                f.write(msg)
+            except UnicodeEncodeError:
+                f.write(msg.encode('utf-8'))
+            except Exception as e:
+                f.write(str(e))
 
     def text(self):
         """ get the log message as a string """
