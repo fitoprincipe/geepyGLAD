@@ -166,7 +166,24 @@ def get_confirmed_OLD(site, date, limit=1, smooth='max'):
 
 def period(start, end, site, limit, year=None, eightConnected=False,
            useProxy=False, mask=None):
-    """ Compute probable and confirmed alerts over a period """
+    """ Compute probable and confirmed alerts over a period
+
+    :param start: the start date of the period
+    :param end: the end date of the period
+    :param site: the site
+    :type site: ee.Geometry or ee.Feature or ee.FeatureCollection
+    :param limit: the minimum area to be computed
+    :param year: the year to compute. If None takes the year from the date of
+        the last available image
+    :param eightConnected: parameter to pass to ee.Kernel
+    :param useProxy: if True, includes alerts that did not change over the
+        given period, but were alerts before the start date. Therefore, those
+        alerts will not have a valid confirmedDate or probableDate (both will
+        be 0). Also, alertDate will be before start_period property
+    :param mask: a mask to apply to results. Typically a forest mask. If a
+        string is passed, it will try to load it as an Image asset
+    :type mask: ee.Image or str
+    """
 
     if isinstance(site, (ee.Feature, ee.FeatureCollection)):
         region = site.geometry()
@@ -192,6 +209,7 @@ def period(start, end, site, limit, year=None, eightConnected=False,
 
     # always get a last image
     last = ee.Image(tools.imagecollection.getImage(filteredDate, -1))
+    period_first = ee.Image(filteredDate.first())
 
     bands = utils.get_bands(last, year)
     confband = ee.String(bands.get('conf'))
@@ -209,7 +227,7 @@ def period(start, end, site, limit, year=None, eightConnected=False,
                      .set('system:time_start', start.millis())
         first = ee.Image(first)
     else:
-        first = ee.Image(filteredDate.first())
+        first = period_first
 
     firstconf = first.select(confband)
     lastconf = last.select(confband)
@@ -254,7 +272,7 @@ def period(start, end, site, limit, year=None, eightConnected=False,
     final = probable.addBands([confirmed, area, date, detected, probD, confD])
     dateformat = 'Y-MM-dd'
 
-    return final.set('start_period', first.date().format(dateformat)) \
+    return final.set('start_period', period_first.date().format(dateformat)) \
         .set('end_period', last.date().format(dateformat)) \
         .set('year', yearInt)
 
