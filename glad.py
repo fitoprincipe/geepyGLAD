@@ -131,6 +131,9 @@ def update_config(parameter, value):
         'saveTo': ['saveTo']
     }
 
+    if parameter in ['minArea']:
+        value = int(value)
+
     fname = 'config.json'
     exists = os.path.isfile(fname)
     if not exists:
