@@ -180,7 +180,7 @@ def _toLocal(vector, filename, folder=None, extension='geojson',
             logger.log(msg)
 
 
-def _are_alerts(alert, name, clas, region, verbose, logger):
+def _are_alerts(alert, name, date, clas, region, verbose, logger):
     try:
         count = utils.histogram(alert, clas, region).getInfo()
     except Exception as e:
@@ -190,7 +190,7 @@ def _are_alerts(alert, name, clas, region, verbose, logger):
         return False
 
     if count == 0:
-        msg = '{}: no alerts'.format(name)
+        msg = '{}: no alerts for {}'.format(name, date)
         if verbose:
             print(msg)
         if logger:
@@ -216,7 +216,7 @@ def _process(geometry, date, clas, limit, folder, raster_mask, destination,
         raise e
 
     # SKIP IF EMPTY ALERT
-    are_alerts = _are_alerts(alert, name, clas, geometry, **kwargs)
+    are_alerts = _are_alerts(alert, name, date, clas, geometry, **kwargs)
     if not are_alerts:
         return None
 
