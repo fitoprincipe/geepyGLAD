@@ -218,7 +218,9 @@ def _process_period(start, end, geometry, limit, year=None,
             logger.log(msg)
         raise e
 
-    are_alerts = _are_alerts(alert, name, 'both', geometry, **kwargs)
+    date_str = '{} to {}'.format(start, end)
+
+    are_alerts = _are_alerts(alert, name, date_str, 'both', geometry, **kwargs)
     if not are_alerts:
         return None
     
