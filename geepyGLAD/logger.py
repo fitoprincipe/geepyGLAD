@@ -2,6 +2,9 @@
 """ Logger module for a custom Logger """
 import datetime
 import os
+from ._version import __version__
+
+HEADER = "geepyGLAD version {}\n\n{{}}".format(__version__)
 
 
 class Logger(object):
@@ -30,9 +33,9 @@ class Logger(object):
         """ writer the header """
         exists = os.path.exists(os.path.join(self.path, self.filename))
         if not self._header and not exists:
-            self._header = text
-            with open(self.filename, 'a+') as f:
-                f.write('{}\n\n'.format(text))
+            self._header = HEADER.format(text)
+            with open(self.filename, 'ab+') as f:
+                f.write('{}\n\n'.format(text).encode('utf-8'))
 
     def log(self, message):
         """ write a log into the logger """
