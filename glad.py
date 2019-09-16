@@ -200,13 +200,14 @@ def sites():
 @main.command()
 @click.argument('start')#, help='Start date for the period')
 @click.argument('end')#, help='Start date for the period')
-@click.option('--proxy', default=False, help='use proxy? If True start date will be dismissed')
+@click.option('-y', '--year', default=None, help='Year of the alerts. If None will use the last image year')
+@click.option('-p', '--proxy', default=False, help='use proxy? If True start date will be dismissed')
 @click.option('-s', '--savein', default=None, help='where to save the files. Takes default from config.json')
 @click.option('--site', default=None, help='The name of the site to process, must be present in the parsed property')
 @click.option('-m', '--mask', default=True, type=bool, help='Whether to use the mask in config file or not')
 @click.option('-v', '--verbose', default=True, type=bool)
 @click.option('--config', default=None, help='The name of the configuration file. Defaults to "config.json"')
-def period(start, end, proxy, savein, site, mask, verbose, config):
+def period(start, end, year, proxy, savein, site, mask, verbose, config):
     """ Export a period (from START to END) of GLAD alerts to Google Drive,
     Earth Engine Asset or Local files. Takes configuration parameters from
     `config.json`.
@@ -282,6 +283,8 @@ def period(start, end, proxy, savein, site, mask, verbose, config):
     args = dict(
         start=start,
         end=end,
+        year=int(year),
+        proxy=bool(proxy),
         site=site,
         limit=limit,
         property_name=property_name,

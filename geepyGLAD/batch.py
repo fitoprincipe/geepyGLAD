@@ -280,7 +280,7 @@ def _process(geometry, date, clas, limit, folder, raster_mask, destination,
         _toAsset(vector, filename, folder, **kwargs)
 
 
-def period(site, start, end, limit, proxy=False, eightConnected=False,
+def period(site, start, end, limit, year=None, proxy=False, eightConnected=False,
            folder=None, property_name=None, raster_mask=None,
            destination='local', verbose=True, logger=None):
     """ General download function for a period """   
@@ -297,7 +297,7 @@ def period(site, start, end, limit, proxy=False, eightConnected=False,
             geom = site.filterMetadata(
                 property_name, 'equals', name).first().geometry()
 
-            _process_period(start, end, geom, limit, None, eightConnected,
+            _process_period(start, end, geom, limit, year, eightConnected,
                             proxy, raster_mask, destination, name, folder,
                             **args)
     else:
@@ -312,7 +312,7 @@ def period(site, start, end, limit, proxy=False, eightConnected=False,
         else:
             geom = site
 
-        _process_period(start, end, geom, limit, None, eightConnected,
+        _process_period(start, end, geom, limit, year, eightConnected,
                         proxy, raster_mask, destination, name, folder,
                         **args)
 

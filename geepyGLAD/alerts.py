@@ -184,7 +184,6 @@ def period(start, end, site, limit, year=None, eightConnected=False,
         string is passed, it will try to load it as an Image asset
     :type mask: ee.Image or str
     """
-
     if isinstance(site, (ee.Feature, ee.FeatureCollection)):
         region = site.geometry()
     else:
