@@ -169,7 +169,7 @@ def period(start, end, site, limit, year=None, eightConnected=False,
     """ Compute probable and confirmed alerts over a period
 
     :param start: the start date of the period
-    :param end: the end date of the period
+    :param end: the end date of the period (inclusive)
     :param site: the site
     :type site: ee.Geometry or ee.Feature or ee.FeatureCollection
     :param limit: the minimum area to be computed
@@ -190,7 +190,7 @@ def period(start, end, site, limit, year=None, eightConnected=False,
         region = site
 
     start = ee.Date(start)
-    end = ee.Date(end)
+    end = ee.Date(end).advance(1, 'day')
 
     filtered = ALERTS.filterBounds(region)
 
